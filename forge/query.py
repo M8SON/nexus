@@ -103,7 +103,7 @@ def _expand_context(
 
 _SINCE_N_DAYS_AGO_RE = re.compile(r"^(\d+)\s*days?\s*ago$")
 _LITERAL_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-_MATCH_PUNCTUATION_RE = re.compile(r"[^\w\s]")
+_LITERALISH_QUERY_RE = re.compile(r"\w[-+./:]\w|\w[+/#]+")
 _MATCH_SYNTAX_ERROR_PATTERNS = (
     "unterminated string",
     "syntax error",
@@ -151,10 +151,15 @@ def _run_search(
     conn: sqlite3.Connection, sql: str, params: list[object]
 ) -> list[tuple]:
     raw_query = str(params[0])
+    if _should_use_literal_query(raw_query):
+        literal_query = _literalize_query(raw_query)
+        if not literal_query:
+            return []
+        return conn.execute(sql, [literal_query, *params[1:]]).fetchall()
     try:
         return conn.execute(sql, params).fetchall()
     except sqlite3.OperationalError as exc:
-        if not _is_match_syntax_error(exc, raw_query):
+        if not _is_match_syntax_error(exc):
             raise
         literal_query = _literalize_query(raw_query)
         if not literal_query:
@@ -163,7 +168,7 @@ def _run_search(
         try:
             return conn.execute(sql, fallback_params).fetchall()
         except sqlite3.OperationalError as fallback_exc:
-            if not _is_match_syntax_error(fallback_exc, raw_query):
+            if not _is_match_syntax_error(fallback_exc):
                 raise
             return []
 
@@ -177,8 +182,12 @@ def _literalize_query(query: str) -> str:
     return " AND ".join(chunks)
 
 
-def _is_match_syntax_error(exc: sqlite3.OperationalError, query: str) -> bool:
+def _should_use_literal_query(query: str) -> bool:
+    if query.count('"') % 2 == 1:
+        return True
+    return bool(_LITERALISH_QUERY_RE.search(query))
+
+
+def _is_match_syntax_error(exc: sqlite3.OperationalError) -> bool:
     message = str(exc).lower()
-    if "no such column" in message:
-        return bool(_MATCH_PUNCTUATION_RE.search(query))
     return any(pattern in message for pattern in _MATCH_SYNTAX_ERROR_PATTERNS)

@@ -158,6 +158,17 @@ def test_generic_no_such_column_error_still_raises(seeded_db):
         _run_search(seeded_db, sql, ["FTS5"])
 
 
+def test_punctuation_query_does_not_hide_sql_column_errors(seeded_db):
+    sql = (
+        "SELECT t.missing_col "
+        "FROM turns t JOIN turns_fts f ON f.rowid = t.id "
+        "WHERE turns_fts MATCH ?"
+    )
+
+    with pytest.raises(sqlite3.OperationalError, match="missing_col"):
+        _run_search(seeded_db, sql, ["foo-bar"])
+
+
 def test_parse_since_iso():
     assert parse_since("2026-04-20") == "2026-04-20T00:00:00"
 
