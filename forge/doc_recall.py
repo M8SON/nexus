@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-PRIORITY_FILES = ["WORKING_MEMORY.md", "README.md", "CLAUDE.md", "AGENTS.md"]
+PRIORITY_FILES = ["WORKING_MEMORY.md", "CLAUDE.md", "AGENTS.md", "README.md"]
 
 
 def discover_context_docs(repo_root: Path) -> list[Path]:
@@ -19,7 +19,7 @@ def discover_context_docs(repo_root: Path) -> list[Path]:
         base = repo_root / subdir
         if not base.is_dir():
             continue
-        for path in sorted(base.glob("*.md")):
+        for path in sorted(base.rglob("*.md")):
             if path.is_file() and path not in seen:
                 docs.append(path)
                 seen.add(path)
