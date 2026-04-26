@@ -103,6 +103,13 @@ def _expand_context(
 
 _SINCE_N_DAYS_AGO_RE = re.compile(r"^(\d+)\s*days?\s*ago$")
 _LITERAL_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+_MATCH_SYNTAX_ERROR_PATTERNS = (
+    "unterminated string",
+    "syntax error",
+    "malformed match expression",
+    "fts5: syntax error",
+    "no such column",
+)
 
 
 def parse_since(value: str | None) -> str | None:
@@ -145,14 +152,18 @@ def _run_search(
 ) -> list[tuple]:
     try:
         return conn.execute(sql, params).fetchall()
-    except sqlite3.OperationalError:
+    except sqlite3.OperationalError as exc:
+        if not _is_match_syntax_error(exc):
+            raise
         literal_query = _literalize_query(str(params[0]))
         if not literal_query:
             return []
         fallback_params = [literal_query, *params[1:]]
         try:
             return conn.execute(sql, fallback_params).fetchall()
-        except sqlite3.OperationalError:
+        except sqlite3.OperationalError as fallback_exc:
+            if not _is_match_syntax_error(fallback_exc):
+                raise
             return []
 
 
@@ -163,3 +174,8 @@ def _literalize_query(query: str) -> str:
         if tokens:
             chunks.append(f"\"{' '.join(tokens)}\"")
     return " AND ".join(chunks)
+
+
+def _is_match_syntax_error(exc: sqlite3.OperationalError) -> bool:
+    message = str(exc).lower()
+    return any(pattern in message for pattern in _MATCH_SYNTAX_ERROR_PATTERNS)

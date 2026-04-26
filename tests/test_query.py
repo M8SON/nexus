@@ -139,6 +139,14 @@ def test_unmatched_quote_query_returns_no_hits_instead_of_error(seeded_db):
     assert search(seeded_db, '"unterminated') == []
 
 
+def test_missing_fts_table_still_raises_operational_error(seeded_db):
+    seeded_db.execute("DROP TABLE turns_fts")
+    seeded_db.commit()
+
+    with pytest.raises(sqlite3.OperationalError, match="turns_fts"):
+        search(seeded_db, "FTS5")
+
+
 def test_parse_since_iso():
     assert parse_since("2026-04-20") == "2026-04-20T00:00:00"
 
