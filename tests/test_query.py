@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from forge.db import open_db
-from forge.query import parse_since, search
+from forge.query import _run_search, parse_since, search
 
 
 @pytest.fixture
@@ -145,6 +145,17 @@ def test_missing_fts_table_still_raises_operational_error(seeded_db):
 
     with pytest.raises(sqlite3.OperationalError, match="turns_fts"):
         search(seeded_db, "FTS5")
+
+
+def test_generic_no_such_column_error_still_raises(seeded_db):
+    sql = (
+        "SELECT t.missing_col "
+        "FROM turns t JOIN turns_fts f ON f.rowid = t.id "
+        "WHERE turns_fts MATCH ?"
+    )
+
+    with pytest.raises(sqlite3.OperationalError, match="missing_col"):
+        _run_search(seeded_db, sql, ["FTS5"])
 
 
 def test_parse_since_iso():
