@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from forge.cli import main
+from forge.cli import _default_projects_path, main
 from forge.db import open_db
 
 
@@ -54,6 +54,23 @@ def test_recall_returns_matching_hit(tmp_path, capsys):
     assert "wake offload is enabled" in output
 
 
+def test_recall_refreshes_from_default_transcript_dir(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    transcripts = home / ".claude" / "projects" / "-home-daedalus-linux"
+    transcripts.mkdir(parents=True)
+    fixture = Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
+    (transcripts / "minimal.jsonl").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    assert main(["recall", "hello"]) == 0
+
+    output = capsys.readouterr().out
+    assert "hello world" in output
+
+
 def test_context_assembles_docs_and_recall_hits(tmp_path, capsys):
     repo = tmp_path / "linux" / "demo"
     repo.mkdir(parents=True)
@@ -89,6 +106,47 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, capsys):
     assert "Wake offload overview" in output
 
 
+def test_context_refreshes_from_transcripts_before_query(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    transcripts = home / ".claude" / "projects" / "-home-daedalus-linux"
+    transcripts.mkdir(parents=True)
+    fixture = Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
+    (transcripts / "minimal.jsonl").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    repo = tmp_path / "linux" / "demo"
+    repo.mkdir(parents=True)
+    (repo / "README.md").write_text("Project readme context", encoding="utf-8")
+
+    assert main(["context", "hello", "--repo-path", str(repo)]) == 0
+
+    output = capsys.readouterr().out
+    assert "Prior session context:" in output
+    assert "hello world" in output
+    assert "Project docs:" in output
+    assert "Project readme context" in output
+
+
+def test_index_defaults_to_transcript_projects_path(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    transcripts = _default_projects_path()
+    transcripts.mkdir(parents=True)
+    fixture = Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
+    (transcripts / "minimal.jsonl").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    assert main(["index"]) == 0
+
+    output = capsys.readouterr().out
+    assert f"Indexed 4 turns from {transcripts}" in output
+
+
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
     repo = tmp_path / "other" / "demo"
     repo.mkdir(parents=True)
@@ -111,3 +169,28 @@ def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
 
     output = capsys.readouterr().out
     assert "managed repo: no" in output
+
+
+def test_doctor_uses_default_db_path_when_omitted(tmp_path, monkeypatch, capsys):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    workspace = tmp_path / "linux"
+    repo = workspace / "demo"
+    repo.mkdir(parents=True)
+
+    assert (
+        main(
+            [
+                "doctor",
+                "--repo-path",
+                str(repo),
+                "--workspace-root",
+                str(workspace),
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert f"db path: {home / '.claude' / 'tools' / 'forge' / 'forge.db'}" in output
+    assert "db path usable: yes" in output

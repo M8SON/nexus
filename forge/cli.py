@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     recall = subparsers.add_parser("recall", help="Search indexed session history")
     recall.add_argument("query")
     _add_db_path_arg(recall)
+    _add_project_dir_arg(recall)
     recall.add_argument("--limit", type=int, default=3)
     recall.add_argument("--context", type=int, default=0)
     recall.add_argument("--since")
@@ -29,12 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     index = subparsers.add_parser("index", help="Index transcript JSONL files")
     _add_db_path_arg(index)
-    index.add_argument(
-        "--project-dir",
-        type=Path,
-        default=None,
-        help="Directory containing transcript JSONL files",
-    )
+    _add_project_dir_arg(index)
     index.set_defaults(handler=_handle_index)
 
     stats = subparsers.add_parser("stats", help="Show index statistics")
@@ -46,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     context.add_argument("query", nargs="?", default="")
     _add_db_path_arg(context)
+    _add_project_dir_arg(context)
     context.add_argument(
         "--repo-path",
         type=Path,
@@ -95,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _handle_recall(args: argparse.Namespace) -> int:
     with _db(args.db_path) as conn:
+        update(conn, _projects_path(args.project_dir))
         hits = search(
             conn,
             args.query,
@@ -117,7 +116,7 @@ def _handle_recall(args: argparse.Namespace) -> int:
 
 
 def _handle_index(args: argparse.Namespace) -> int:
-    project_dir = Path(args.project_dir) if args.project_dir is not None else Path.cwd()
+    project_dir = _projects_path(args.project_dir)
     with _db(args.db_path) as conn:
         inserted = update(conn, project_dir)
     print(f"Indexed {inserted} turns from {project_dir}")
@@ -139,6 +138,7 @@ def _handle_stats(args: argparse.Namespace) -> int:
 def _handle_context(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo_path)
     with _db(args.db_path) as conn:
+        update(conn, _projects_path(args.project_dir))
         hits = search(conn, args.query, limit=args.limit) if args.query else []
 
     recall_hits = [hit.content for hit in hits]
@@ -159,13 +159,14 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     )
     config = ForgeConfig(workspace_root=workspace_root)
     repo_path = Path(args.repo_path)
-    db_path = Path(args.db_path)
+    db_path = _resolved_db_path(args.db_path)
+    db_parent_ready = db_path.parent.exists() or _parent_path_is_creatable(db_path)
 
     checks = [
         ("workspace exists", workspace_root.exists()),
         ("repo exists", repo_path.exists()),
         ("managed repo", config.is_managed_repo(repo_path) if repo_path.exists() else False),
-        ("db parent exists", db_path.parent.exists()),
+        ("db parent ready", db_parent_ready),
     ]
 
     if db_path.exists():
@@ -196,13 +197,41 @@ def _add_db_path_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_project_dir_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--project-dir",
+        type=Path,
+        default=None,
+        help="Directory containing transcript JSONL files",
+    )
+
+
 def _default_db_path() -> Path:
-    workspace_root = ForgeConfig.default().workspace_root
-    return workspace_root / ".forge" / "forge.db"
+    return Path(os.path.expanduser("~")) / ".claude" / "tools" / "forge" / "forge.db"
+
+
+def _default_projects_path() -> Path:
+    return Path(os.path.expanduser("~")) / ".claude" / "projects" / "-home-daedalus-linux"
+
+
+def _resolved_db_path(db_path: Path | None) -> Path:
+    return _default_db_path() if db_path is None else Path(db_path)
+
+
+def _projects_path(project_dir: Path | None) -> Path:
+    return _default_projects_path() if project_dir is None else Path(project_dir)
 
 
 def _db(db_path: Path | None):
-    return open_db(_default_db_path() if db_path is None else Path(db_path))
+    return open_db(_resolved_db_path(db_path))
+
+
+def _parent_path_is_creatable(path: Path) -> bool:
+    parent = path.parent
+    for candidate in (parent, *parent.parents):
+        if candidate.exists():
+            return candidate.is_dir() and os.access(candidate, os.W_OK | os.X_OK)
+    return False
 
 
 def _read_doc_snippet(path: Path) -> str:
