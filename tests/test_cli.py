@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from forge.cli import _default_projects_path, main
+from forge.cli import _default_projects_path, _workspace_projects_slug, main
 from forge.db import open_db
 
 
@@ -145,6 +145,21 @@ def test_index_defaults_to_transcript_projects_path(tmp_path, monkeypatch, capsy
 
     output = capsys.readouterr().out
     assert f"Indexed 4 turns from {transcripts}" in output
+
+
+def test_workspace_projects_slug_is_derived_from_workspace_root():
+    assert _workspace_projects_slug(Path("/home/daedalus/linux")) == "-home-daedalus-linux"
+    assert _workspace_projects_slug(Path("/tmp/demo space")) == "-tmp-demo space"
+
+
+def test_default_projects_path_uses_workspace_root_slug(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr("forge.cli.ForgeConfig.default", classmethod(lambda cls: cls(workspace_root=Path("/tmp/custom/workspace"))))
+
+    assert _default_projects_path() == (
+        home / ".claude" / "projects" / "-tmp-custom-workspace"
+    )
 
 
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):

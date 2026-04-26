@@ -211,7 +211,17 @@ def _default_db_path() -> Path:
 
 
 def _default_projects_path() -> Path:
-    return Path(os.path.expanduser("~")) / ".claude" / "projects" / "-home-daedalus-linux"
+    workspace_root = ForgeConfig.default().workspace_root
+    return (
+        Path(os.path.expanduser("~"))
+        / ".claude"
+        / "projects"
+        / _workspace_projects_slug(workspace_root)
+    )
+
+
+def _workspace_projects_slug(workspace_root: Path) -> str:
+    return str(Path(workspace_root)).replace("/", "-")
 
 
 def _resolved_db_path(db_path: Path | None) -> Path:
