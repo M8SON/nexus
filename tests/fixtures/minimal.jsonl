@@ -1,0 +1,7 @@
+{"type":"permission-mode","permissionMode":"default","sessionId":"sess-1"}
+{"type":"user","sessionId":"sess-1","cwd":"/x","gitBranch":"main","timestamp":"2026-04-24T00:00:00Z","uuid":"u-user-1","parentUuid":null,"message":{"role":"user","content":"hello world"}}
+{"type":"assistant","sessionId":"sess-1","cwd":"/x","gitBranch":"main","timestamp":"2026-04-24T00:00:01Z","uuid":"u-asst-1","parentUuid":"u-user-1","message":{"role":"assistant","content":[{"type":"text","text":"sure thing"},{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls","description":"list files"}}]}}
+{"type":"user","sessionId":"sess-1","cwd":"/x","gitBranch":"main","timestamp":"2026-04-24T00:00:02Z","uuid":"u-tr-1","parentUuid":"u-asst-1","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"file_a.txt\nfile_b.txt"}]}}
+{"type":"attachment","sessionId":"sess-1","timestamp":"2026-04-24T00:00:03Z","uuid":"u-att-1","attachment":{"type":"hook_success","content":"some hook content"}}
+this is not valid json
+{"type":"file-history-snapshot","sessionId":"sess-1","timestamp":"2026-04-24T00:00:04Z"}

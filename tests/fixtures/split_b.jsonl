@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"sX","uuid":"x3","parentUuid":"x2","timestamp":"2026-04-24T00:00:02Z","message":{"role":"user","content":"continued"}}
+{"type":"assistant","sessionId":"sX","uuid":"x4","parentUuid":"x3","timestamp":"2026-04-24T00:00:03Z","message":{"role":"assistant","content":[{"type":"text","text":"end"}]}}
