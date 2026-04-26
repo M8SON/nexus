@@ -103,7 +103,8 @@ def _expand_context(
 
 _SINCE_N_DAYS_AGO_RE = re.compile(r"^(\d+)\s*days?\s*ago$")
 _LITERAL_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
-_LITERALISH_QUERY_RE = re.compile(r"\w[-+./:]\w|\w[+/#]+")
+_FIELD_QUERY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*:.+$")
+_UNSAFE_LITERAL_TOKEN_RE = re.compile(r"\w[-+./#]\w|\w[+/#]+")
 _MATCH_SYNTAX_ERROR_PATTERNS = (
     "unterminated string",
     "syntax error",
@@ -185,7 +186,12 @@ def _literalize_query(query: str) -> str:
 def _should_use_literal_query(query: str) -> bool:
     if query.count('"') % 2 == 1:
         return True
-    return bool(_LITERALISH_QUERY_RE.search(query))
+    for part in query.split():
+        if _FIELD_QUERY_RE.match(part):
+            continue
+        if _UNSAFE_LITERAL_TOKEN_RE.search(part):
+            return True
+    return False
 
 
 def _is_match_syntax_error(exc: sqlite3.OperationalError) -> bool:

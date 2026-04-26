@@ -124,15 +124,29 @@ def test_zero_context_returns_no_neighbors(seeded_db):
 def test_punctuation_heavy_literal_query_matches(seeded_db):
     seeded_db.execute(
         "INSERT INTO turns "
-        "(session_id, file_path, turn_index, uuid, ts, role, content) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("s3", "/x", 0, "u5", "2026-04-22T12:00:00Z", "user", "debug foo-bar in C++"),
+        "(session_id, file_path, turn_index, uuid, ts, role, content, tool_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("s3", "/x", 0, "u5", "2026-04-22T12:00:00Z", "user", "debug foo-bar in C++", None),
     )
     seeded_db.commit()
 
     hits = search(seeded_db, "foo-bar")
 
     assert any("foo-bar" in hit.content for hit in hits)
+
+
+def test_fielded_tool_name_query_is_not_rewritten_as_literal(seeded_db):
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content, tool_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("s3", "/x", 1, "u6", "2026-04-22T12:00:01Z", "tool_use", "ran search", "grep"),
+    )
+    seeded_db.commit()
+
+    hits = search(seeded_db, "tool_name:grep")
+
+    assert any(hit.tool_name == "grep" for hit in hits)
 
 
 def test_unmatched_quote_query_returns_no_hits_instead_of_error(seeded_db):
