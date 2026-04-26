@@ -175,7 +175,7 @@ def _run_search(
 
 def _literalize_query(query: str) -> str:
     chunks: list[str] = []
-    for part in query.split():
+    for part in _split_query_parts(query):
         tokens = _LITERAL_TOKEN_RE.findall(part)
         if tokens:
             chunks.append(f"\"{' '.join(tokens)}\"")
@@ -184,7 +184,7 @@ def _literalize_query(query: str) -> str:
 
 def _normalize_query(query: str) -> str:
     parts: list[str] = []
-    for part in query.split():
+    for part in _split_query_parts(query):
         normalized = _normalize_part(part)
         if normalized:
             parts.append(normalized)
@@ -194,12 +194,36 @@ def _normalize_query(query: str) -> str:
 def _normalize_part(part: str) -> str:
     if _FIELD_QUERY_RE.match(part):
         return part
+    if len(part) >= 2 and part.startswith('"') and part.endswith('"') and part.count('"') == 2:
+        return part
     if _QUOTE_RE.search(part) or _UNSAFE_LITERAL_TOKEN_RE.search(part):
         tokens = _LITERAL_TOKEN_RE.findall(part)
         if tokens:
             return f"\"{' '.join(tokens)}\""
         return ""
     return part
+
+
+def _split_query_parts(query: str) -> list[str]:
+    parts: list[str] = []
+    buf: list[str] = []
+    in_quotes = False
+
+    for ch in query:
+        if ch == '"':
+            in_quotes = not in_quotes
+            buf.append(ch)
+            continue
+        if ch.isspace() and not in_quotes:
+            if buf:
+                parts.append("".join(buf))
+                buf.clear()
+            continue
+        buf.append(ch)
+
+    if buf:
+        parts.append("".join(buf))
+    return parts
 
 
 def _is_match_syntax_error(exc: sqlite3.OperationalError) -> bool:

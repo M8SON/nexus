@@ -172,6 +172,27 @@ def test_mixed_fielded_and_literal_query_preserves_field_and_matches_literal(
     assert all(hit.tool_name == "grep" for hit in hits)
 
 
+def test_valid_phrase_query_preserves_phrase_semantics(seeded_db):
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("s5", "/x", 0, "u9", "2026-04-22T12:00:04Z", "user", "alpha beta"),
+    )
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("s5", "/x", 1, "u10", "2026-04-22T12:00:05Z", "user", "alpha x beta"),
+    )
+    seeded_db.commit()
+
+    hits = search(seeded_db, '"alpha beta"')
+
+    assert any(hit.content == "alpha beta" for hit in hits)
+    assert all(hit.content != "alpha x beta" for hit in hits)
+
+
 def test_unmatched_quote_query_returns_no_hits_instead_of_error(seeded_db):
     assert search(seeded_db, '"unterminated') == []
 
