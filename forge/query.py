@@ -105,6 +105,7 @@ _SINCE_N_DAYS_AGO_RE = re.compile(r"^(\d+)\s*days?\s*ago$")
 _LITERAL_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _FIELD_QUERY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*:.+$")
 _UNSAFE_LITERAL_TOKEN_RE = re.compile(r"\w[-+./#]\w|\w[+/#]+")
+_QUOTE_RE = re.compile(r'"')
 _MATCH_SYNTAX_ERROR_PATTERNS = (
     "unterminated string",
     "syntax error",
@@ -152,18 +153,16 @@ def _run_search(
     conn: sqlite3.Connection, sql: str, params: list[object]
 ) -> list[tuple]:
     raw_query = str(params[0])
-    if _should_use_literal_query(raw_query):
-        literal_query = _literalize_query(raw_query)
-        if not literal_query:
-            return []
-        return conn.execute(sql, [literal_query, *params[1:]]).fetchall()
+    prepared_query = _normalize_query(raw_query)
+    if not prepared_query:
+        return []
     try:
-        return conn.execute(sql, params).fetchall()
+        return conn.execute(sql, [prepared_query, *params[1:]]).fetchall()
     except sqlite3.OperationalError as exc:
         if not _is_match_syntax_error(exc):
             raise
         literal_query = _literalize_query(raw_query)
-        if not literal_query:
+        if not literal_query or literal_query == prepared_query:
             return []
         fallback_params = [literal_query, *params[1:]]
         try:
@@ -183,15 +182,24 @@ def _literalize_query(query: str) -> str:
     return " AND ".join(chunks)
 
 
-def _should_use_literal_query(query: str) -> bool:
-    if query.count('"') % 2 == 1:
-        return True
+def _normalize_query(query: str) -> str:
+    parts: list[str] = []
     for part in query.split():
-        if _FIELD_QUERY_RE.match(part):
-            continue
-        if _UNSAFE_LITERAL_TOKEN_RE.search(part):
-            return True
-    return False
+        normalized = _normalize_part(part)
+        if normalized:
+            parts.append(normalized)
+    return " ".join(parts)
+
+
+def _normalize_part(part: str) -> str:
+    if _FIELD_QUERY_RE.match(part):
+        return part
+    if _QUOTE_RE.search(part) or _UNSAFE_LITERAL_TOKEN_RE.search(part):
+        tokens = _LITERAL_TOKEN_RE.findall(part)
+        if tokens:
+            return f"\"{' '.join(tokens)}\""
+        return ""
+    return part
 
 
 def _is_match_syntax_error(exc: sqlite3.OperationalError) -> bool:

@@ -149,6 +149,29 @@ def test_fielded_tool_name_query_is_not_rewritten_as_literal(seeded_db):
     assert any(hit.tool_name == "grep" for hit in hits)
 
 
+def test_mixed_fielded_and_literal_query_preserves_field_and_matches_literal(
+    seeded_db,
+):
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content, tool_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("s3", "/x", 2, "u7", "2026-04-22T12:00:02Z", "tool_use", "found foo-bar output", "grep"),
+    )
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content, tool_name) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("s4", "/x", 0, "u8", "2026-04-22T12:00:03Z", "tool_use", "found foo-bar output", "sed"),
+    )
+    seeded_db.commit()
+
+    hits = search(seeded_db, "tool_name:grep foo-bar")
+
+    assert any(hit.tool_name == "grep" and "foo-bar" in hit.content for hit in hits)
+    assert all(hit.tool_name == "grep" for hit in hits)
+
+
 def test_unmatched_quote_query_returns_no_hits_instead_of_error(seeded_db):
     assert search(seeded_db, '"unterminated') == []
 
