@@ -126,23 +126,41 @@ def _ingest_file(conn: sqlite3.Connection, path: Path) -> int:
     )
     existing = cur.fetchone()
 
+    affected_sessions: set[str] = set()
+
     if existing is None:
         start_offset = 0
+        records_total = 0
+        reindex_from_scratch = False
     else:
         prev_mtime, prev_size, prev_offset, _ = existing
         if st.st_mtime_ns == prev_mtime and st.st_size == prev_size:
             return 0
-        if st.st_size < prev_size:
-            start_offset = 0
-        else:
+        can_resume = st.st_size > prev_size and _is_safe_append(conn, path, prev_offset)
+        if can_resume:
             start_offset = prev_offset
+            records_total = existing[3]
+            reindex_from_scratch = False
+        else:
+            start_offset = 0
+            records_total = 0
+            reindex_from_scratch = True
+            affected_sessions.update(
+                row[0]
+                for row in conn.execute(
+                    "SELECT DISTINCT session_id FROM turns WHERE file_path = ?",
+                    (str(path),),
+                ).fetchall()
+            )
 
     inserted = 0
     new_offset = start_offset
-    records_total = existing[3] if existing else 0
 
     try:
         with open(path, "rb") as f:
+            if reindex_from_scratch:
+                # Any on-disk rewrite can invalidate the saved offset, so rebuild the file.
+                conn.execute("DELETE FROM turns WHERE file_path = ?", (str(path),))
             f.seek(start_offset)
             while True:
                 line_start = f.tell()
@@ -161,6 +179,7 @@ def _ingest_file(conn: sqlite3.Connection, path: Path) -> int:
                     continue
                 turns = route_record(record)
                 for turn in turns:
+                    affected_sessions.add(turn.session_id)
                     if _insert_turn(conn, turn, str(path)):
                         inserted += 1
                 records_total += len(turns)
@@ -178,6 +197,11 @@ def _ingest_file(conn: sqlite3.Connection, path: Path) -> int:
         "  records_total = excluded.records_total",
         (str(path), st.st_mtime_ns, st.st_size, new_offset, records_total),
     )
+
+    if reindex_from_scratch:
+        for session_id in sorted(affected_sessions):
+            _rebuild_session_turn_indices(conn, session_id)
+
     conn.commit()
     return inserted
 
@@ -212,3 +236,57 @@ def _insert_turn(conn: sqlite3.Connection, turn: Turn, file_path: str) -> bool:
         return True
     except sqlite3.IntegrityError:
         return False
+
+
+def _rebuild_session_turn_indices(conn: sqlite3.Connection, session_id: str) -> None:
+    rows = conn.execute(
+        "SELECT id FROM turns WHERE session_id = ? ORDER BY ts, id",
+        (session_id,),
+    ).fetchall()
+    for turn_index, row in enumerate(rows):
+        conn.execute(
+            "UPDATE turns SET turn_index = ? WHERE id = ?",
+            (turn_index, row[0]),
+        )
+
+
+def _is_safe_append(conn: sqlite3.Connection, path: Path, prev_offset: int) -> bool:
+    expected = conn.execute(
+        "SELECT session_id, uuid, parent_uuid, ts, role, tool_name, content, cwd, git_branch "
+        "FROM turns WHERE file_path = ? ORDER BY id",
+        (str(path),),
+    ).fetchall()
+    actual: list[tuple[str, str, str | None, str, str, str | None, str, str | None, str | None]] = []
+
+    try:
+        with open(path, "rb") as f:
+            while f.tell() < prev_offset:
+                raw = f.readline()
+                if not raw:
+                    return False
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                actual.extend(_turn_key(turn) for turn in route_record(record))
+    except OSError:
+        return False
+
+    return actual == expected and prev_offset <= path.stat().st_size
+
+
+def _turn_key(turn: Turn) -> tuple[str, str, str | None, str, str, str | None, str, str | None, str | None]:
+    return (
+        turn.session_id,
+        turn.uuid,
+        turn.parent_uuid,
+        turn.ts,
+        turn.role,
+        turn.tool_name,
+        turn.content,
+        turn.cwd,
+        turn.git_branch,
+    )

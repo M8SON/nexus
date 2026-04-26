@@ -19,6 +19,18 @@ def fixtures_dir():
     return Path(__file__).resolve().parent / "fixtures"
 
 
+def _single_user_record(content: str, *, session_id: str = "sess-2") -> str:
+    return (
+        '{"type":"user","sessionId":"'
+        + session_id
+        + '","uuid":"u-fresh-1","parentUuid":null,'
+        '"timestamp":"2026-04-24T01:00:00Z",'
+        '"message":{"role":"user","content":"'
+        + content
+        + '"}}\n'
+    )
+
+
 def test_user_text_routed():
     record = {
         "type": "user",
@@ -200,15 +212,66 @@ def test_update_full_reindex_on_shrink(tmp_db_path, fixtures_dir, tmp_path):
     conn = open_db(tmp_db_path)
     try:
         update(conn, projects)
-        target.write_text(
-            '{"type":"user","sessionId":"sess-2","uuid":"u-fresh-1",'
-            '"parentUuid":null,"timestamp":"2026-04-24T01:00:00Z",'
-            '"message":{"role":"user","content":"new-content"}}\n'
-        )
+        target.write_text(_single_user_record("new-content"))
         n2 = update(conn, projects)
+        rows = conn.execute(
+            "SELECT session_id, content FROM turns WHERE file_path = ? ORDER BY id",
+            (str(target),),
+        ).fetchall()
     finally:
         conn.close()
     assert n2 == 1
+    assert rows == [("sess-2", "new-content")]
+
+
+def test_update_reindexes_same_size_rewrite(tmp_db_path, fixtures_dir, tmp_path):
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    target = projects / "minimal.jsonl"
+    shutil.copy(fixtures_dir / "minimal.jsonl", target)
+    original_size = target.stat().st_size
+
+    replacement_base = _single_user_record("")
+    replacement = _single_user_record("x" * (original_size - len(replacement_base)))
+    assert len(replacement) == original_size
+
+    conn = open_db(tmp_db_path)
+    try:
+        update(conn, projects)
+        target.write_text(replacement)
+        n2 = update(conn, projects)
+        rows = conn.execute(
+            "SELECT session_id, content FROM turns WHERE file_path = ? ORDER BY id",
+            (str(target),),
+        ).fetchall()
+    finally:
+        conn.close()
+    assert n2 == 1
+    assert rows == [("sess-2", "x" * (original_size - len(replacement_base)))]
+
+
+def test_update_reindexes_growing_rewrite(tmp_db_path, fixtures_dir, tmp_path):
+    projects = tmp_path / "projects"
+    projects.mkdir()
+    target = projects / "minimal.jsonl"
+    shutil.copy(fixtures_dir / "minimal.jsonl", target)
+    original_size = target.stat().st_size
+
+    replacement = _single_user_record("y" * (original_size + 25))
+
+    conn = open_db(tmp_db_path)
+    try:
+        update(conn, projects)
+        target.write_text(replacement)
+        n2 = update(conn, projects)
+        rows = conn.execute(
+            "SELECT session_id, content FROM turns WHERE file_path = ? ORDER BY id",
+            (str(target),),
+        ).fetchall()
+    finally:
+        conn.close()
+    assert n2 == 1
+    assert rows == [("sess-2", "y" * (original_size + 25))]
 
 
 def test_turn_index_monotonic_per_session_across_files(

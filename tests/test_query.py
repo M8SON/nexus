@@ -121,6 +121,24 @@ def test_zero_context_returns_no_neighbors(seeded_db):
     assert hits[0].context == []
 
 
+def test_punctuation_heavy_literal_query_matches(seeded_db):
+    seeded_db.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("s3", "/x", 0, "u5", "2026-04-22T12:00:00Z", "user", "debug foo-bar in C++"),
+    )
+    seeded_db.commit()
+
+    hits = search(seeded_db, "foo-bar")
+
+    assert any("foo-bar" in hit.content for hit in hits)
+
+
+def test_unmatched_quote_query_returns_no_hits_instead_of_error(seeded_db):
+    assert search(seeded_db, '"unterminated') == []
+
+
 def test_parse_since_iso():
     assert parse_since("2026-04-20") == "2026-04-20T00:00:00"
 

@@ -64,7 +64,7 @@ def search(
     sql += " ORDER BY score LIMIT ?"
     params.append(limit)
 
-    rows = conn.execute(sql, params).fetchall()
+    rows = _run_search(conn, sql, params)
 
     hits: list[Hit] = []
     for row in rows:
@@ -102,6 +102,7 @@ def _expand_context(
 
 
 _SINCE_N_DAYS_AGO_RE = re.compile(r"^(\d+)\s*days?\s*ago$")
+_LITERAL_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
 
 def parse_since(value: str | None) -> str | None:
@@ -137,3 +138,28 @@ def parse_since(value: str | None) -> str | None:
         )
 
     return None
+
+
+def _run_search(
+    conn: sqlite3.Connection, sql: str, params: list[object]
+) -> list[tuple]:
+    try:
+        return conn.execute(sql, params).fetchall()
+    except sqlite3.OperationalError:
+        literal_query = _literalize_query(str(params[0]))
+        if not literal_query:
+            return []
+        fallback_params = [literal_query, *params[1:]]
+        try:
+            return conn.execute(sql, fallback_params).fetchall()
+        except sqlite3.OperationalError:
+            return []
+
+
+def _literalize_query(query: str) -> str:
+    chunks: list[str] = []
+    for part in query.split():
+        tokens = _LITERAL_TOKEN_RE.findall(part)
+        if tokens:
+            chunks.append(f"\"{' '.join(tokens)}\"")
+    return " AND ".join(chunks)
