@@ -30,3 +30,10 @@ def test_repo_outside_workspace_is_not_enabled(tmp_path):
     repo.mkdir(parents=True)
     cfg = ForgeConfig(workspace_root=tmp_path / "linux")
     assert cfg.is_managed_repo(repo) is False
+
+
+def test_policy_and_skill_docs_exist():
+    root = Path(__file__).resolve().parents[1]
+    assert (root / "forge" / "policies" / "core.md").exists()
+    assert (root / "forge" / "policies" / "continuity.md").exists()
+    assert (root / "forge" / "skills" / "README.md").exists()
