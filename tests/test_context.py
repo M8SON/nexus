@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from forge.context import build_context_summary
 
 
@@ -26,3 +28,9 @@ def test_collapses_multiline_entries_and_drops_blank_items():
     assert "Doc line two" in summary
     assert "   " not in summary
     assert "\n- \n" not in summary
+
+
+def test_agent_adapters_exist():
+    root = Path(__file__).resolve().parents[1]
+    assert (root / "forge" / "adapters" / "claude" / "CLAUDE.md").exists()
+    assert (root / "forge" / "adapters" / "codex" / "AGENTS.md").exists()
