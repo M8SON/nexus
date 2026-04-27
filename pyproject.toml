@@ -8,6 +8,3 @@ version = "0.1.0"
 description = "Local-first shared assistant framework"
 readme = "README.md"
 requires-python = ">=3.11"
-
-[project.scripts]
-forge = "forge.cli:main"
