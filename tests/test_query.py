@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from forge.db import open_db
+from forge.indexer import update
 from forge.query import _run_search, parse_since, search
 
 
@@ -248,3 +249,10 @@ def test_parse_since_n_days_ago():
 
 def test_parse_since_unknown_returns_none():
     assert parse_since("blooberry") is None
+
+
+def test_migrated_recall_keeps_expected_hit_behavior(tmp_path):
+    conn = open_db(tmp_path / "index.db")
+    update(conn, Path(__file__).parent / "fixtures")
+    hits = search(conn, "session", limit=2)
+    assert len(hits) == 2
