@@ -46,7 +46,6 @@ Phase 2 (active memory, token telemetry) remains documented in the spec but inte
 
 - `forge context` still uses global recall results, not repo-scoped recall, because the migrated query layer does not yet expose a repo/cwd filter.
 - The default Claude projects path derivation is still a local string-convention helper; there is no shared slug utility yet.
-- `docs/` remains untracked in the repo worktree.
 
 ## Recent Commits (Tasks 7–10)
 
@@ -59,7 +58,7 @@ Phase 2 (active memory, token telemetry) remains documented in the spec but inte
 
 ## Next Step
 
-Plan `2026-04-26-forge.md` is fully executed. No next plan task. Possible follow-ups:
-- write a phase-2 plan for active memory and token telemetry
-- add a repo/cwd filter to the recall query layer (currently global; called out under Current Limitations)
-- decide whether `docs/` should be committed to the repo (still untracked)
+Plan `2026-04-26-forge.md` is fully executed. Active follow-ups, in chosen order:
+1. Wire forge into Claude Code sessions — spec at `docs/superpowers/specs/2026-04-30-forge-session-activation-design.md`. Static CLAUDE.md at `~/linux/CLAUDE.md` + SessionStart hook running `forge.cli context`. Active session recall deferred to phase 2.
+2. Add a repo/cwd filter to the recall query layer (currently global; called out under Current Limitations).
+3. Write a phase-2 plan for active memory and token telemetry.
