@@ -38,17 +38,19 @@ def test_index_then_stats_reports_indexed_content(tmp_path, capsys):
 
 
 def test_recall_returns_matching_hit(tmp_path, capsys):
+    repo = tmp_path / "linux" / "demo"
+    repo.mkdir(parents=True)
     db_path = tmp_path / "forge.db"
     conn = open_db(db_path)
     conn.execute(
-        "INSERT INTO turns (session_id, file_path, turn_index, uuid, ts, role, content) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("session-1", "/tmp/demo.jsonl", 0, "u1", "2026-04-26T10:00:00Z", "user", "wake offload is enabled"),
+        "INSERT INTO turns (session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("session-1", "/tmp/demo.jsonl", 0, "u1", "2026-04-26T10:00:00Z", "user", "wake offload is enabled", str(repo)),
     )
     conn.commit()
     conn.close()
 
-    assert main(["recall", "wake", "--db-path", str(db_path)]) == 0
+    assert main(["recall", "wake", "--db-path", str(db_path), "--repo", str(repo)]) == 0
 
     output = capsys.readouterr().out
     assert "wake offload is enabled" in output
@@ -111,15 +113,17 @@ def test_context_refreshes_from_transcripts_before_query(tmp_path, monkeypatch, 
     monkeypatch.setenv("HOME", str(home))
     transcripts = home / ".claude" / "projects" / "-home-daedalus-linux"
     transcripts.mkdir(parents=True)
-    fixture = Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
-    (transcripts / "minimal.jsonl").write_text(
-        fixture.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-
     repo = tmp_path / "linux" / "demo"
     repo.mkdir(parents=True)
     (repo / "README.md").write_text("Project readme context", encoding="utf-8")
+
+    fixture_text = (
+        Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
+    ).read_text(encoding="utf-8")
+    (transcripts / "minimal.jsonl").write_text(
+        fixture_text.replace('"cwd":"/x"', f'"cwd":"{repo}"'),
+        encoding="utf-8",
+    )
 
     assert main(["context", "hello", "--repo-path", str(repo)]) == 0
 

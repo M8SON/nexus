@@ -27,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--since")
     recall.add_argument("--session")
     recall.add_argument("--role", action="append", dest="roles")
+    recall.add_argument(
+        "--repo",
+        type=Path,
+        default=None,
+        help="Scope hits to turns whose cwd is this path or a subpath",
+    )
     recall.set_defaults(handler=_handle_recall)
 
     index = subparsers.add_parser("index", help="Index transcript JSONL files")
@@ -102,6 +108,7 @@ def _handle_recall(args: argparse.Namespace) -> int:
             since=args.since,
             session=args.session,
             roles=args.roles,
+            cwd=str(args.repo) if args.repo else None,
         )
 
     if not hits:
@@ -139,7 +146,11 @@ def _handle_context(args: argparse.Namespace) -> int:
     repo_path = Path(args.repo_path)
     with _db(args.db_path) as conn:
         update(conn, _projects_path(args.project_dir))
-        hits = search(conn, args.query, limit=args.limit) if args.query else []
+        hits = (
+            search(conn, args.query, limit=args.limit, cwd=str(repo_path))
+            if args.query
+            else []
+        )
 
     recall_hits = [hit.content for hit in hits]
     doc_snippets = [_read_doc_snippet(path) for path in discover_context_docs(repo_path)]

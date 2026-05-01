@@ -43,6 +43,7 @@ def search(
     since: str | None = None,
     session: str | None = None,
     roles: list[str] | None = None,
+    cwd: str | None = None,
 ) -> list[Hit]:
     """BM25 search with optional filters and +/-context expansion."""
     sql = (
@@ -61,6 +62,9 @@ def search(
     if roles:
         sql += " AND t.role IN (" + ",".join("?" * len(roles)) + ")"
         params.extend(roles)
+    if cwd:
+        sql += " AND (t.cwd = ? OR t.cwd LIKE ? || '/%')"
+        params.extend([cwd, cwd])
     sql += " ORDER BY score LIMIT ?"
     params.append(limit)
 

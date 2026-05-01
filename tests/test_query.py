@@ -251,6 +251,45 @@ def test_parse_since_unknown_returns_none():
     assert parse_since("blooberry") is None
 
 
+def test_cwd_filter_scopes_results_to_repo(tmp_path):
+    conn = open_db(tmp_path / "index.db")
+    rows = [
+        ("s-forge", 0, "uA", "2026-04-30T10:00:00Z", "user", "wake offload notes", "/home/daedalus/linux/forge"),
+        ("s-mini", 0, "uB", "2026-04-30T10:01:00Z", "user", "wake offload notes", "/home/daedalus/linux/miniclaw"),
+        ("s-sub", 0, "uC", "2026-04-30T10:02:00Z", "user", "wake offload notes", "/home/daedalus/linux/forge/forge"),
+        ("s-other", 0, "uD", "2026-04-30T10:03:00Z", "user", "wake offload notes", "/tmp/elsewhere"),
+        ("s-null", 0, "uE", "2026-04-30T10:04:00Z", "user", "wake offload notes", None),
+    ]
+    for sid, idx, uuid, ts, role, content, cwd in rows:
+        conn.execute(
+            "INSERT INTO turns "
+            "(session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (sid, "/x", idx, uuid, ts, role, content, cwd),
+        )
+    conn.commit()
+
+    hits = search(conn, "wake", cwd="/home/daedalus/linux/forge")
+    sessions = sorted(h.session_id for h in hits)
+
+    assert sessions == ["s-forge", "s-sub"]
+
+
+def test_cwd_filter_none_preserves_global_search(tmp_path):
+    conn = open_db(tmp_path / "index.db")
+    conn.execute(
+        "INSERT INTO turns "
+        "(session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("s-x", "/x", 0, "uX", "2026-04-30T10:00:00Z", "user", "global hit", "/anywhere"),
+    )
+    conn.commit()
+
+    hits = search(conn, "global")
+
+    assert len(hits) == 1
+
+
 def test_migrated_recall_keeps_expected_hit_behavior(tmp_path):
     conn = open_db(tmp_path / "index.db")
     update(conn, Path(__file__).parent / "fixtures")
