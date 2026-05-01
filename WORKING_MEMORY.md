@@ -18,6 +18,12 @@ Completed and review-clean:
 - Task 9: migration-quality regression test against fixtures
 - Task 10: retired `claude-recall`; archived to `~/.archive/claude-recall-2026-04-26/`
 
+Session activation (2026-04-30) is also live. Forge is now actually used by Claude Code sessions under `~/linux/`:
+- `~/linux/CLAUDE.md` (workspace policy pointer) → adapter → policies via Claude Code's CLAUDE.md ancestor walk.
+- `~/.claude/hooks/forge-session-start.sh` registered in `~/.claude/settings.json` under `hooks.SessionStart` with the `"startup"` matcher.
+- Hook runs `forge.cli context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
+- Verified end-to-end with fresh sessions in `~/linux/`: agent receives the `Project docs:` block at session start.
+
 Phase 2 (active memory, token telemetry) remains documented in the spec but intentionally deferred.
 
 ## Important Implementation Notes
@@ -46,6 +52,7 @@ Phase 2 (active memory, token telemetry) remains documented in the spec but inte
 
 - `forge context` still uses global recall results, not repo-scoped recall, because the migrated query layer does not yet expose a repo/cwd filter.
 - The default Claude projects path derivation is still a local string-convention helper; there is no shared slug utility yet.
+- The `forge` package is not installed in its own venv (no `pip install -e .` from `~/linux/forge`), so `python -m forge.cli` only resolves the package via cwd-on-`sys.path`. The SessionStart hook works around this by `cd "$FORGE_DIR"` before invoking the CLI; cleaner long-term fix is to install the package properly.
 
 ## Recent Commits (Tasks 7–10)
 
@@ -58,7 +65,8 @@ Phase 2 (active memory, token telemetry) remains documented in the spec but inte
 
 ## Next Step
 
-Plan `2026-04-26-forge.md` is fully executed. Active follow-ups, in chosen order:
-1. Wire forge into Claude Code sessions — spec at `docs/superpowers/specs/2026-04-30-forge-session-activation-design.md`. Static CLAUDE.md at `~/linux/CLAUDE.md` + SessionStart hook running `forge.cli context`. Active session recall deferred to phase 2.
+Active follow-ups, in chosen order:
+1. ~~Wire forge into Claude Code sessions~~ — Done 2026-04-30. Spec/plan in `docs/superpowers/{specs,plans}/2026-04-30-forge-session-activation-*.md`.
 2. Add a repo/cwd filter to the recall query layer (currently global; called out under Current Limitations).
-3. Write a phase-2 plan for active memory and token telemetry.
+3. Install forge into its own venv (`pip install -e .` from `~/linux/forge`) and remove the `cd $FORGE_DIR` workaround in the SessionStart hook.
+4. Write a phase-2 plan for active memory and token telemetry.
