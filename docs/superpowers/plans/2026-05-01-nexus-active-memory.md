@@ -1,72 +1,72 @@
-# Forge Active Memory Implementation Plan
+# Nexus Active Memory Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Wire MemPalace into Claude Code and Codex as forge's memory engine, retire the BM25 layer, and codify a per-repo wing convention with storage redirected into `~/linux/forge/data/`.
+**Goal:** Wire MemPalace into Claude Code and Codex as nexus's memory engine, retire the BM25 layer, and codify a per-repo wing convention with storage redirected into `~/linux/nexus/data/`.
 
-**Architecture:** Forge becomes a small nexus that defines the cwd-to-wing convention, owns hook installation across both agents, and redirects MemPalace's bulk storage into the forge tree. MemPalace is the engine; forge is the conventions and wiring. The BM25 layer is removed because MemPalace's recall fully replaces it.
+**Architecture:** Nexus becomes a small nexus that defines the cwd-to-wing convention, owns hook installation across both agents, and redirects MemPalace's bulk storage into the nexus tree. MemPalace is the engine; nexus is the conventions and wiring. The BM25 layer is removed because MemPalace's recall fully replaces it.
 
-**Tech Stack:** Python 3.12, argparse, sqlite3 (still used for forge config), MemPalace CLI (subprocess), bash hook scripts, Claude Code hook system, Codex CLI hook system.
+**Tech Stack:** Python 3.12, argparse, sqlite3 (still used for nexus config), MemPalace CLI (subprocess), bash hook scripts, Claude Code hook system, Codex CLI hook system.
 
-**Spec:** `docs/superpowers/specs/2026-05-01-forge-active-memory-design.md`
+**Spec:** `docs/superpowers/specs/2026-05-01-nexus-active-memory-design.md`
 
 ---
 
 ## File Structure
 
 **Create:**
-- `forge/memory/__init__.py` — package marker
-- `forge/memory/wings.py` — `resolve_wing(cwd) -> str | None`
-- `forge/memory/env.py` — `mempalace_env(wing, repo_root) -> dict[str, str]`
-- `forge/memory/install.py` — `init()`, `install_claude_hooks()`, `install_codex_hooks()`, settings-merge helpers
-- `forge/memory/status.py` — `status_report()` for the CLI subcommand
+- `nexus/memory/__init__.py` — package marker
+- `nexus/memory/wings.py` — `resolve_wing(cwd) -> str | None`
+- `nexus/memory/env.py` — `mempalace_env(wing, repo_root) -> dict[str, str]`
+- `nexus/memory/install.py` — `init()`, `install_claude_hooks()`, `install_codex_hooks()`, settings-merge helpers
+- `nexus/memory/status.py` — `status_report()` for the CLI subcommand
 - `tests/test_wings.py`, `tests/test_env.py`, `tests/test_install.py`, `tests/test_status.py`
 - `tests/test_smoke_mempalace.py` — slow end-to-end against a real palace
-- `hooks/forge-user-prompt-submit.sh` — checked-in source for the new hook script
+- `hooks/nexus-user-prompt-submit.sh` — checked-in source for the new hook script
 
 **Modify:**
-- `forge/cli.py` — gain `memory` subcommand group; remove `recall`/`index`/`stats`
-- `forge/context.py` — rewrite to mock-friendly subprocess call to `mempalace wake-up`
-- `forge/policies/continuity.md` — concrete recall/save triggers
+- `nexus/cli.py` — gain `memory` subcommand group; remove `recall`/`index`/`stats`
+- `nexus/context.py` — rewrite to mock-friendly subprocess call to `mempalace wake-up`
+- `nexus/policies/continuity.md` — concrete recall/save triggers
 - `tests/test_cli.py` — drop legacy cases, add new ones
 - `tests/test_context.py` — mock `mempalace wake-up` instead of BM25
 - `.gitignore` — add `data/`
 - `WORKING_MEMORY.md` — phase-2 status
 
 **Delete:**
-- `forge/db.py`, `forge/query.py`, `forge/indexer.py`
+- `nexus/db.py`, `nexus/query.py`, `nexus/indexer.py`
 - `tests/test_query.py`, `tests/test_indexer.py`
-- `~/.claude/tools/forge/forge.db` (data file, deleted at install time)
+- `~/.claude/tools/nexus/nexus.db` (data file, deleted at install time)
 
 ---
 
-## Task 1: Create `forge/memory/` package skeleton
+## Task 1: Create `nexus/memory/` package skeleton
 
 **Files:**
-- Create: `forge/memory/__init__.py`
+- Create: `nexus/memory/__init__.py`
 
 - [ ] **Step 1: Create the package directory and empty init**
 
 ```bash
-mkdir -p /home/daedalus/linux/forge/forge/memory
+mkdir -p /home/daedalus/linux/nexus/nexus/memory
 ```
 
-Then create `/home/daedalus/linux/forge/forge/memory/__init__.py` with:
+Then create `/home/daedalus/linux/nexus/nexus/memory/__init__.py` with:
 
 ```python
-"""Forge memory orchestration. Wires MemPalace into both supported agents."""
+"""Nexus memory orchestration. Wires MemPalace into both supported agents."""
 ```
 
 - [ ] **Step 2: Verify the package imports**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -c "import forge.memory"`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -c "import nexus.memory"`
 Expected: exits 0 with no output.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/__init__.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): scaffold forge.memory subpackage"
+git -C /home/daedalus/linux/nexus add nexus/memory/__init__.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): scaffold nexus.memory subpackage"
 ```
 
 ---
@@ -74,12 +74,12 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): scaffold forge.memory
 ## Task 2: `wings.resolve_wing` — happy path
 
 **Files:**
-- Create: `forge/memory/wings.py`
+- Create: `nexus/memory/wings.py`
 - Test: `tests/test_wings.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/daedalus/linux/forge/tests/test_wings.py`:
+Create `/home/daedalus/linux/nexus/tests/test_wings.py`:
 
 ```python
 """Tests for cwd → wing-name resolution."""
@@ -87,12 +87,12 @@ from pathlib import Path
 
 import pytest
 
-from forge.memory.wings import resolve_wing
+from nexus.memory.wings import resolve_wing
 
 
 @pytest.mark.parametrize("cwd, expected", [
-    ("/home/daedalus/linux/forge", "forge"),
-    ("/home/daedalus/linux/forge/forge/memory", "forge"),
+    ("/home/daedalus/linux/nexus", "nexus"),
+    ("/home/daedalus/linux/nexus/nexus/memory", "nexus"),
     ("/home/daedalus/linux/miniclaw", "miniclaw"),
     ("/home/daedalus/linux/miniclaw/skills/dashboard", "miniclaw"),
 ])
@@ -102,28 +102,28 @@ def test_managed_repo_yields_repo_name(cwd, expected):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_wings.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'forge.memory.wings'`.
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_wings.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'nexus.memory.wings'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/daedalus/linux/forge/forge/memory/wings.py`:
+Create `/home/daedalus/linux/nexus/nexus/memory/wings.py`:
 
 ```python
 """Resolve a cwd to a MemPalace wing name."""
 from pathlib import Path
 
-from forge.config import ForgeConfig
+from nexus.config import NexusConfig
 
 
-def resolve_wing(cwd: Path, config: ForgeConfig | None = None) -> str | None:
+def resolve_wing(cwd: Path, config: NexusConfig | None = None) -> str | None:
     """Return the wing name for `cwd`, or None if `cwd` is not managed.
 
     - cwd at /home/daedalus/linux/<repo>/... → wing = <repo>
     - cwd at /home/daedalus/linux             → wing = "workspace"
     - anywhere else                            → None
     """
-    config = config or ForgeConfig.default()
+    config = config or NexusConfig.default()
     workspace = config.workspace_root.resolve()
     cwd = Path(cwd).resolve()
 
@@ -143,14 +143,14 @@ def _normalize(name: str) -> str:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_wings.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_wings.py -v`
 Expected: PASS — 4 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/wings.py tests/test_wings.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): resolve cwd to wing name for managed repos"
+git -C /home/daedalus/linux/nexus add nexus/memory/wings.py tests/test_wings.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): resolve cwd to wing name for managed repos"
 ```
 
 ---
@@ -159,7 +159,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): resolve cwd to wing n
 
 **Files:**
 - Modify: `tests/test_wings.py`
-- Modify: `forge/memory/wings.py` (only if tests fail)
+- Modify: `nexus/memory/wings.py` (only if tests fail)
 
 - [ ] **Step 1: Add edge-case tests**
 
@@ -180,7 +180,7 @@ def test_repo_name_with_dashes_is_normalized(tmp_path, monkeypatch):
     repo = workspace / "my-cool-repo"
     repo.mkdir(parents=True)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
     assert resolve_wing(repo) == "my_cool_repo"
@@ -193,7 +193,7 @@ def test_symlink_resolving_back_into_workspace_is_managed(tmp_path, monkeypatch)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.symlink_to(repo)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
     assert resolve_wing(elsewhere) == "real_repo"
@@ -201,14 +201,14 @@ def test_symlink_resolving_back_into_workspace_is_managed(tmp_path, monkeypatch)
 
 - [ ] **Step 2: Run tests and verify they pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_wings.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_wings.py -v`
 Expected: PASS — all cases. The implementation already handles these via `Path.resolve()` and `_normalize()`. No code change needed.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add tests/test_wings.py
-git -C /home/daedalus/linux/forge commit -m "test(memory): cover workspace root, outside, dashes, symlinks"
+git -C /home/daedalus/linux/nexus add tests/test_wings.py
+git -C /home/daedalus/linux/nexus commit -m "test(memory): cover workspace root, outside, dashes, symlinks"
 ```
 
 ---
@@ -216,59 +216,59 @@ git -C /home/daedalus/linux/forge commit -m "test(memory): cover workspace root,
 ## Task 4: `env.mempalace_env`
 
 **Files:**
-- Create: `forge/memory/env.py`
+- Create: `nexus/memory/env.py`
 - Test: `tests/test_env.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/daedalus/linux/forge/tests/test_env.py`:
+Create `/home/daedalus/linux/nexus/tests/test_env.py`:
 
 ```python
 """Tests for MemPalace env-var assembly."""
 from pathlib import Path
 
-from forge.memory.env import mempalace_env
+from nexus.memory.env import mempalace_env
 
 
 def test_env_contains_palace_path_state_dir_repo_dir(tmp_path):
-    repo = tmp_path / "linux" / "forge"
+    repo = tmp_path / "linux" / "nexus"
     repo.mkdir(parents=True)
-    env = mempalace_env(wing="forge", repo_root=repo, forge_root=tmp_path / "forge_root")
+    env = mempalace_env(wing="nexus", repo_root=repo, nexus_root=tmp_path / "nexus_root")
 
-    assert env["MEMPALACE_PALACE_PATH"] == str(tmp_path / "forge_root" / "data" / "palace")
-    assert env["STATE_DIR"] == str(tmp_path / "forge_root" / "data" / "hook_state")
+    assert env["MEMPALACE_PALACE_PATH"] == str(tmp_path / "nexus_root" / "data" / "palace")
+    assert env["STATE_DIR"] == str(tmp_path / "nexus_root" / "data" / "hook_state")
     assert env["MEMPAL_DIR"] == str(repo)
 
 
 def test_env_returns_strings_only():
-    env = mempalace_env(wing="forge", repo_root=Path("/tmp"), forge_root=Path("/tmp/f"))
+    env = mempalace_env(wing="nexus", repo_root=Path("/tmp"), nexus_root=Path("/tmp/f"))
     assert all(isinstance(v, str) for v in env.values())
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_env.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_env.py -v`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/daedalus/linux/forge/forge/memory/env.py`:
+Create `/home/daedalus/linux/nexus/nexus/memory/env.py`:
 
 ```python
 """Assemble env-var blocks for MemPalace invocations."""
 from pathlib import Path
 
 
-FORGE_ROOT_DEFAULT = Path("/home/daedalus/linux/forge")
+NEXUS_ROOT_DEFAULT = Path("/home/daedalus/linux/nexus")
 
 
 def mempalace_env(
     wing: str,
     repo_root: Path,
-    forge_root: Path | None = None,
+    nexus_root: Path | None = None,
 ) -> dict[str, str]:
-    """Env block to pass when invoking MemPalace under forge."""
-    root = Path(forge_root or FORGE_ROOT_DEFAULT)
+    """Env block to pass when invoking MemPalace under nexus."""
+    root = Path(nexus_root or NEXUS_ROOT_DEFAULT)
     return {
         "MEMPALACE_PALACE_PATH": str(root / "data" / "palace"),
         "STATE_DIR": str(root / "data" / "hook_state"),
@@ -278,14 +278,14 @@ def mempalace_env(
 
 - [ ] **Step 4: Run tests and verify they pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_env.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_env.py -v`
 Expected: PASS — 2 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/env.py tests/test_env.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): assemble MemPalace env-var block"
+git -C /home/daedalus/linux/nexus add nexus/memory/env.py tests/test_env.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): assemble MemPalace env-var block"
 ```
 
 ---
@@ -293,24 +293,24 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): assemble MemPalace en
 ## Task 5: `install.merge_claude_hooks` — idempotent settings.json merge
 
 **Files:**
-- Create: `forge/memory/install.py`
+- Create: `nexus/memory/install.py`
 - Test: `tests/test_install.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/daedalus/linux/forge/tests/test_install.py`:
+Create `/home/daedalus/linux/nexus/tests/test_install.py`:
 
 ```python
 """Tests for hook installation into Claude/Codex settings."""
 import json
 from pathlib import Path
 
-from forge.memory.install import merge_claude_hooks
+from nexus.memory.install import merge_claude_hooks
 
 
 HOOK_SCRIPT = "/abs/path/mempal_save_hook.sh"
 PRECOMPACT_SCRIPT = "/abs/path/mempal_precompact_hook.sh"
-USERPROMPT_SCRIPT = "/abs/path/forge-user-prompt-submit.sh"
+USERPROMPT_SCRIPT = "/abs/path/nexus-user-prompt-submit.sh"
 
 
 def test_merge_into_empty_settings_adds_three_hooks(tmp_path):
@@ -396,15 +396,15 @@ def test_merge_writes_backup_before_change(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
-Expected: FAIL — module `forge.memory.install` not found.
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
+Expected: FAIL — module `nexus.memory.install` not found.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/daedalus/linux/forge/forge/memory/install.py`:
+Create `/home/daedalus/linux/nexus/nexus/memory/install.py`:
 
 ```python
-"""Install MemPalace + forge hooks into Claude Code and Codex CLI configs."""
+"""Install MemPalace + nexus hooks into Claude Code and Codex CLI configs."""
 import json
 import shutil
 from pathlib import Path
@@ -458,14 +458,14 @@ def _ensure_hook(
 
 - [ ] **Step 4: Run tests and verify they pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
 Expected: PASS — 4 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/install.py tests/test_install.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent claude hooks merge with .bak"
+git -C /home/daedalus/linux/nexus add nexus/memory/install.py tests/test_install.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): idempotent claude hooks merge with .bak"
 ```
 
 ---
@@ -473,7 +473,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent claude hoo
 ## Task 6: `install.write_codex_hooks`
 
 **Files:**
-- Modify: `forge/memory/install.py`
+- Modify: `nexus/memory/install.py`
 - Modify: `tests/test_install.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -481,7 +481,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent claude hoo
 Append to `tests/test_install.py`:
 
 ```python
-from forge.memory.install import write_codex_hooks
+from nexus.memory.install import write_codex_hooks
 
 
 def test_codex_hooks_written_with_save_and_precompact(tmp_path):
@@ -513,12 +513,12 @@ def test_codex_hooks_idempotent(tmp_path):
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
 Expected: FAIL — `write_codex_hooks` not defined.
 
 - [ ] **Step 3: Add implementation**
 
-Append to `forge/memory/install.py`:
+Append to `nexus/memory/install.py`:
 
 ```python
 def write_codex_hooks(
@@ -554,14 +554,14 @@ def _add_codex_entry(data: dict, event: str, command: str) -> None:
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
 Expected: PASS — 6 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/install.py tests/test_install.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent codex hooks.json writer"
+git -C /home/daedalus/linux/nexus add nexus/memory/install.py tests/test_install.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): idempotent codex hooks.json writer"
 ```
 
 ---
@@ -569,7 +569,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent codex hook
 ## Task 7: `install.locate_mempalace_hooks`
 
 **Files:**
-- Modify: `forge/memory/install.py`
+- Modify: `nexus/memory/install.py`
 - Modify: `tests/test_install.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -577,7 +577,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): idempotent codex hook
 Append to `tests/test_install.py`:
 
 ```python
-from forge.memory.install import locate_mempalace_hooks
+from nexus.memory.install import locate_mempalace_hooks
 
 
 def test_locate_mempalace_hooks_finds_via_python_import(tmp_path, monkeypatch):
@@ -603,12 +603,12 @@ def test_locate_raises_when_not_found(tmp_path):
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py::test_locate_mempalace_hooks_finds_via_python_import tests/test_install.py::test_locate_raises_when_not_found -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py::test_locate_mempalace_hooks_finds_via_python_import tests/test_install.py::test_locate_raises_when_not_found -v`
 Expected: FAIL — function not defined.
 
 - [ ] **Step 3: Add implementation**
 
-Append to `forge/memory/install.py`:
+Append to `nexus/memory/install.py`:
 
 ```python
 def locate_mempalace_hooks(*, repo_root: Path) -> tuple[Path, Path]:
@@ -624,21 +624,21 @@ def locate_mempalace_hooks(*, repo_root: Path) -> tuple[Path, Path]:
     if not save.exists() or not precompact.exists():
         raise FileNotFoundError(
             f"MemPalace hooks not found under {repo_root}/hooks. "
-            f"Pass --mempalace-repo to forge memory init."
+            f"Pass --mempalace-repo to nexus memory init."
         )
     return save, precompact
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
 Expected: PASS — 8 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/install.py tests/test_install.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): locate mempalace hook scripts under a repo root"
+git -C /home/daedalus/linux/nexus add nexus/memory/install.py tests/test_install.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): locate mempalace hook scripts under a repo root"
 ```
 
 ---
@@ -646,7 +646,7 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): locate mempalace hook
 ## Task 8: `install.init` orchestration
 
 **Files:**
-- Modify: `forge/memory/install.py`
+- Modify: `nexus/memory/install.py`
 - Modify: `tests/test_install.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -654,16 +654,16 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): locate mempalace hook
 Append to `tests/test_install.py`:
 
 ```python
-from forge.memory.install import init
+from nexus.memory.install import init
 
 
 def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
     workspace = tmp_path / "linux"
-    repo = workspace / "forge"
+    repo = workspace / "nexus"
     repo.mkdir(parents=True)
-    forge_root = workspace / "forge"
+    nexus_root = workspace / "nexus"
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
@@ -674,20 +674,20 @@ def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
 
     fake_home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(fake_home))
-    user_prompt_hook = tmp_path / "forge-user-prompt-submit.sh"
+    user_prompt_hook = tmp_path / "nexus-user-prompt-submit.sh"
     user_prompt_hook.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
 
     result = init(
         repo=repo,
         mempalace_repo=mempalace,
-        forge_root=forge_root,
+        nexus_root=nexus_root,
         user_prompt_hook=user_prompt_hook,
         skip_backfill=True,
     )
 
-    assert result["wing"] == "forge"
-    assert (forge_root / "data" / "palace").is_dir()
-    assert (forge_root / "data" / "hook_state").is_dir()
+    assert result["wing"] == "nexus"
+    assert (nexus_root / "data" / "palace").is_dir()
+    assert (nexus_root / "data" / "hook_state").is_dir()
     assert (fake_home / ".claude" / "settings.json").exists()
     assert (fake_home / ".codex" / "hooks.json").exists()
 
@@ -696,7 +696,7 @@ def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):
     workspace = tmp_path / "linux"
     workspace.mkdir()
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
@@ -705,7 +705,7 @@ def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):
         init(
             repo=tmp_path / "outside",
             mempalace_repo=tmp_path / "mempalace_repo",
-            forge_root=workspace / "forge",
+            nexus_root=workspace / "nexus",
             user_prompt_hook=tmp_path / "u.sh",
             skip_backfill=True,
         )
@@ -713,36 +713,36 @@ def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):
 
 - [ ] **Step 2: Run tests to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py::test_init_creates_data_dirs_and_merges_settings tests/test_install.py::test_init_refuses_when_cwd_outside_workspace -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py::test_init_creates_data_dirs_and_merges_settings tests/test_install.py::test_init_refuses_when_cwd_outside_workspace -v`
 Expected: FAIL — `init` not defined.
 
 - [ ] **Step 3: Add implementation**
 
-Append to `forge/memory/install.py`:
+Append to `nexus/memory/install.py`:
 
 ```python
 import os
 
-from forge.memory.wings import resolve_wing
+from nexus.memory.wings import resolve_wing
 
 
 def init(
     *,
     repo: Path,
     mempalace_repo: Path,
-    forge_root: Path,
+    nexus_root: Path,
     user_prompt_hook: Path,
     skip_backfill: bool = False,
 ) -> dict:
     """Top-level install: data dirs, claude/codex hook merges, optional backfill."""
     repo = Path(repo).resolve()
-    forge_root = Path(forge_root)
+    nexus_root = Path(nexus_root)
     wing = resolve_wing(repo)
     if wing is None:
         raise ValueError(f"{repo} is not under workspace")
 
-    (forge_root / "data" / "palace").mkdir(parents=True, exist_ok=True)
-    (forge_root / "data" / "hook_state").mkdir(parents=True, exist_ok=True)
+    (nexus_root / "data" / "palace").mkdir(parents=True, exist_ok=True)
+    (nexus_root / "data" / "hook_state").mkdir(parents=True, exist_ok=True)
 
     save, precompact = locate_mempalace_hooks(repo_root=mempalace_repo)
 
@@ -766,7 +766,7 @@ def init(
     )
 
     backfill_done = False
-    marker = forge_root / "data" / "backfill_markers" / f"{wing}.done"
+    marker = nexus_root / "data" / "backfill_markers" / f"{wing}.done"
     if not skip_backfill and not marker.exists():
         # Backfill is best-effort; failure does not undo the install.
         marker.parent.mkdir(parents=True, exist_ok=True)
@@ -807,14 +807,14 @@ def _run_backfill(wing: str, marker: Path) -> bool:
 
 - [ ] **Step 4: Run tests and verify they pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_install.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_install.py -v`
 Expected: PASS — 10 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/install.py tests/test_install.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): forge memory init orchestration"
+git -C /home/daedalus/linux/nexus add nexus/memory/install.py tests/test_install.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): nexus memory init orchestration"
 ```
 
 ---
@@ -822,21 +822,21 @@ git -C /home/daedalus/linux/forge commit -m "feat(memory): forge memory init orc
 ## Task 9: UserPromptSubmit hook script
 
 **Files:**
-- Create: `hooks/forge-user-prompt-submit.sh`
+- Create: `hooks/nexus-user-prompt-submit.sh`
 
 - [ ] **Step 1: Create the hook script**
 
-Create `/home/daedalus/linux/forge/hooks/forge-user-prompt-submit.sh`:
+Create `/home/daedalus/linux/nexus/hooks/nexus-user-prompt-submit.sh`:
 
 ```bash
 #!/usr/bin/env bash
-# Forge UserPromptSubmit hook. Prepends mempalace search hits to the user's
+# Nexus UserPromptSubmit hook. Prepends mempalace search hits to the user's
 # prompt as additional context. Best-effort: any failure produces empty
 # injection, never a dropped prompt.
 
 set -e
 
-WING="${FORGE_WING:-}"
+WING="${NEXUS_WING:-}"
 [ -n "$WING" ] || exit 0
 
 # Read the prompt from stdin (Claude Code passes it as JSON).
@@ -844,7 +844,7 @@ PAYLOAD="$(cat)"
 PROMPT="$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("user_prompt",""))' 2>/dev/null || true)"
 [ -n "$PROMPT" ] || { printf '%s' "$PAYLOAD"; exit 0; }
 
-LOG_DIR="$HOME/.cache/forge"
+LOG_DIR="$HOME/.cache/nexus"
 mkdir -p "$LOG_DIR" 2>/dev/null || true
 LOG="$LOG_DIR/user-prompt-hook.log"
 
@@ -867,27 +867,27 @@ print(json.dumps(data))
 
 - [ ] **Step 2: Make the script executable**
 
-Run: `chmod +x /home/daedalus/linux/forge/hooks/forge-user-prompt-submit.sh`
+Run: `chmod +x /home/daedalus/linux/nexus/hooks/nexus-user-prompt-submit.sh`
 Expected: exits 0.
 
 - [ ] **Step 3: Smoke-test the script in failure mode**
 
-Run: `echo '{"user_prompt":"hello"}' | FORGE_WING=test /home/daedalus/linux/forge/hooks/forge-user-prompt-submit.sh`
+Run: `echo '{"user_prompt":"hello"}' | NEXUS_WING=test /home/daedalus/linux/nexus/hooks/nexus-user-prompt-submit.sh`
 Expected: prints back the original JSON unchanged because `mempalace` is either missing or returns empty for an empty palace.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add hooks/forge-user-prompt-submit.sh
-git -C /home/daedalus/linux/forge commit -m "feat(hooks): user-prompt-submit hook injects mempalace hits"
+git -C /home/daedalus/linux/nexus add hooks/nexus-user-prompt-submit.sh
+git -C /home/daedalus/linux/nexus commit -m "feat(hooks): user-prompt-submit hook injects mempalace hits"
 ```
 
 ---
 
-## Task 10: `forge memory init` CLI subcommand
+## Task 10: `nexus memory init` CLI subcommand
 
 **Files:**
-- Modify: `forge/cli.py`
+- Modify: `nexus/cli.py`
 - Modify: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -896,13 +896,13 @@ Append to `tests/test_cli.py`:
 
 ```python
 def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
-    from forge.cli import main as cli_main
+    from nexus.cli import main as cli_main
 
     workspace = tmp_path / "linux"
-    repo = workspace / "forge"
+    repo = workspace / "nexus"
     repo.mkdir(parents=True)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
@@ -921,21 +921,21 @@ def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
     code = cli_main([
         "memory", "init",
         "--mempalace-repo", str(mempalace),
-        "--forge-root", str(workspace / "forge"),
+        "--nexus-root", str(workspace / "nexus"),
         "--user-prompt-hook", str(user_prompt_hook),
         "--skip-backfill",
     ])
     assert code == 0
     output = capsys.readouterr().out
-    assert "wing: forge" in output
+    assert "wing: nexus" in output
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py::test_memory_init_invokes_install -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py::test_memory_init_invokes_install -v`
 Expected: FAIL — argparse rejects unknown subcommand `memory`.
 
-- [ ] **Step 3: Add the subcommand to `forge/cli.py`**
+- [ ] **Step 3: Add the subcommand to `nexus/cli.py`**
 
 Add inside `build_parser()` (after the existing parsers, before `return parser`):
 
@@ -948,11 +948,11 @@ Add inside `build_parser()` (after the existing parsers, before `return parser`)
                           help="Repo to initialize the wing for (default: cwd)")
     mem_init.add_argument("--mempalace-repo", type=Path, required=True,
                           help="Path to a local MemPalace clone (for hook scripts)")
-    mem_init.add_argument("--forge-root", type=Path,
-                          default=Path("/home/daedalus/linux/forge"),
-                          help="Root of the forge repo (where data/ lives)")
+    mem_init.add_argument("--nexus-root", type=Path,
+                          default=Path("/home/daedalus/linux/nexus"),
+                          help="Root of the nexus repo (where data/ lives)")
     mem_init.add_argument("--user-prompt-hook", type=Path, required=True,
-                          help="Path to the forge UserPromptSubmit hook script")
+                          help="Path to the nexus UserPromptSubmit hook script")
     mem_init.add_argument("--skip-backfill", action="store_true")
     mem_init.set_defaults(handler=_handle_memory_init)
 ```
@@ -961,19 +961,19 @@ Also add the handler:
 
 ```python
 def _handle_memory_init(args: argparse.Namespace) -> int:
-    from forge.memory.install import init as install_init
+    from nexus.memory.install import init as install_init
 
     repo = Path(args.repo) if args.repo else Path.cwd()
     try:
         result = install_init(
             repo=repo,
             mempalace_repo=Path(args.mempalace_repo),
-            forge_root=Path(args.forge_root),
+            nexus_root=Path(args.nexus_root),
             user_prompt_hook=Path(args.user_prompt_hook),
             skip_backfill=args.skip_backfill,
         )
     except (ValueError, FileNotFoundError) as exc:
-        print(f"forge memory init failed: {exc}", file=sys.stderr)
+        print(f"nexus memory init failed: {exc}", file=sys.stderr)
         return 1
 
     print(f"wing: {result['wing']}")
@@ -985,87 +985,87 @@ def _handle_memory_init(args: argparse.Namespace) -> int:
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py::test_memory_init_invokes_install -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py::test_memory_init_invokes_install -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/cli.py tests/test_cli.py
-git -C /home/daedalus/linux/forge commit -m "feat(cli): forge memory init subcommand"
+git -C /home/daedalus/linux/nexus add nexus/cli.py tests/test_cli.py
+git -C /home/daedalus/linux/nexus commit -m "feat(cli): nexus memory init subcommand"
 ```
 
 ---
 
-## Task 11: `forge memory status` CLI subcommand
+## Task 11: `nexus memory status` CLI subcommand
 
 **Files:**
-- Create: `forge/memory/status.py`
-- Modify: `forge/cli.py`
+- Create: `nexus/memory/status.py`
+- Modify: `nexus/cli.py`
 - Create: `tests/test_status.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/daedalus/linux/forge/tests/test_status.py`:
+Create `/home/daedalus/linux/nexus/tests/test_status.py`:
 
 ```python
-"""Tests for `forge memory status`."""
+"""Tests for `nexus memory status`."""
 from pathlib import Path
 
-from forge.memory.status import status_report
+from nexus.memory.status import status_report
 
 
 def test_status_reports_palace_existence(tmp_path, monkeypatch):
     workspace = tmp_path / "linux"
-    repo = workspace / "forge"
+    repo = workspace / "nexus"
     repo.mkdir(parents=True)
-    forge_root = workspace / "forge"
-    (forge_root / "data" / "palace").mkdir(parents=True)
+    nexus_root = workspace / "nexus"
+    (nexus_root / "data" / "palace").mkdir(parents=True)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
-    report = status_report(repo=repo, forge_root=forge_root)
-    assert report["wing"] == "forge"
+    report = status_report(repo=repo, nexus_root=nexus_root)
+    assert report["wing"] == "nexus"
     assert report["palace_exists"] is True
 
 
 def test_status_handles_missing_palace(tmp_path, monkeypatch):
     workspace = tmp_path / "linux"
-    repo = workspace / "forge"
+    repo = workspace / "nexus"
     repo.mkdir(parents=True)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
-    report = status_report(repo=repo, forge_root=workspace / "nope")
+    report = status_report(repo=repo, nexus_root=workspace / "nope")
     assert report["palace_exists"] is False
 ```
 
 - [ ] **Step 2: Run test to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_status.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_status.py -v`
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement `status.py`**
 
-Create `/home/daedalus/linux/forge/forge/memory/status.py`:
+Create `/home/daedalus/linux/nexus/nexus/memory/status.py`:
 
 ```python
-"""Read-only status report for `forge memory status`."""
+"""Read-only status report for `nexus memory status`."""
 import os
 import shutil
 from pathlib import Path
 
-from forge.memory.wings import resolve_wing
+from nexus.memory.wings import resolve_wing
 
 
-def status_report(*, repo: Path, forge_root: Path) -> dict:
+def status_report(*, repo: Path, nexus_root: Path) -> dict:
     repo = Path(repo).resolve()
-    forge_root = Path(forge_root)
-    palace = forge_root / "data" / "palace"
+    nexus_root = Path(nexus_root)
+    palace = nexus_root / "data" / "palace"
     home = Path(os.path.expanduser("~"))
 
     return {
@@ -1082,13 +1082,13 @@ def status_report(*, repo: Path, forge_root: Path) -> dict:
 
 - [ ] **Step 4: Wire into CLI**
 
-Add to `forge/cli.py` inside the `memory_sub` block (after `mem_init` registration):
+Add to `nexus/cli.py` inside the `memory_sub` block (after `mem_init` registration):
 
 ```python
     mem_status = memory_sub.add_parser("status", help="Report memory wiring state")
     mem_status.add_argument("--repo", type=Path, default=None)
-    mem_status.add_argument("--forge-root", type=Path,
-                            default=Path("/home/daedalus/linux/forge"))
+    mem_status.add_argument("--nexus-root", type=Path,
+                            default=Path("/home/daedalus/linux/nexus"))
     mem_status.set_defaults(handler=_handle_memory_status)
 ```
 
@@ -1096,9 +1096,9 @@ And the handler:
 
 ```python
 def _handle_memory_status(args: argparse.Namespace) -> int:
-    from forge.memory.status import status_report
+    from nexus.memory.status import status_report
     repo = Path(args.repo) if args.repo else Path.cwd()
-    report = status_report(repo=repo, forge_root=Path(args.forge_root))
+    report = status_report(repo=repo, nexus_root=Path(args.nexus_root))
     for key, value in report.items():
         print(f"{key}: {value}")
     return 0
@@ -1106,22 +1106,22 @@ def _handle_memory_status(args: argparse.Namespace) -> int:
 
 - [ ] **Step 5: Run tests and verify pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_status.py tests/test_cli.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_status.py tests/test_cli.py -v`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/memory/status.py forge/cli.py tests/test_status.py
-git -C /home/daedalus/linux/forge commit -m "feat(memory): forge memory status subcommand"
+git -C /home/daedalus/linux/nexus add nexus/memory/status.py nexus/cli.py tests/test_status.py
+git -C /home/daedalus/linux/nexus commit -m "feat(memory): nexus memory status subcommand"
 ```
 
 ---
 
-## Task 12: Rewrite `forge context` to use `mempalace wake-up`
+## Task 12: Rewrite `nexus context` to use `mempalace wake-up`
 
 **Files:**
-- Modify: `forge/cli.py` (`_handle_context`)
+- Modify: `nexus/cli.py` (`_handle_context`)
 - Modify: `tests/test_cli.py` (replace BM25-mocking cases)
 
 - [ ] **Step 1: Update the test to expect mempalace wake-up output**
@@ -1130,14 +1130,14 @@ Replace the body of `test_context_assembles_docs_and_recall_hits` in `tests/test
 
 ```python
 def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
-    from forge.cli import main as cli_main
+    from nexus.cli import main as cli_main
 
     workspace = tmp_path / "linux"
     repo = workspace / "demo"
     repo.mkdir(parents=True)
     (repo / "README.md").write_text("Wake offload overview", encoding="utf-8")
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
 
@@ -1145,7 +1145,7 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
     def fake_wake_up(wing, env):
         captured_calls.append((wing, env))
         return "Wake offload was completed"
-    monkeypatch.setattr("forge.cli._mempalace_wake_up", fake_wake_up)
+    monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
 
     code = cli_main(["context", "wake", "--repo-path", str(repo)])
     assert code == 0
@@ -1158,21 +1158,21 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
     assert captured_calls and captured_calls[0][0] == "demo"
 ```
 
-Also delete the existing `test_context_refreshes_from_transcripts_before_query` — `forge context` no longer indexes transcripts.
+Also delete the existing `test_context_refreshes_from_transcripts_before_query` — `nexus context` no longer indexes transcripts.
 
 - [ ] **Step 2: Run the test to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py::test_context_assembles_docs_and_recall_hits -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py::test_context_assembles_docs_and_recall_hits -v`
 Expected: FAIL — `_mempalace_wake_up` not defined.
 
 - [ ] **Step 3: Rewrite `_handle_context` and add `_mempalace_wake_up`**
 
-In `forge/cli.py`, replace `_handle_context`:
+In `nexus/cli.py`, replace `_handle_context`:
 
 ```python
 def _handle_context(args: argparse.Namespace) -> int:
-    from forge.memory.wings import resolve_wing
-    from forge.memory.env import mempalace_env
+    from nexus.memory.wings import resolve_wing
+    from nexus.memory.env import mempalace_env
 
     repo_path = Path(args.repo_path).resolve()
     wing = resolve_wing(repo_path)
@@ -1213,26 +1213,26 @@ Remove `update(conn, ...)` calls and the `_db()` helper from this handler. The f
 
 - [ ] **Step 4: Run the test to verify pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py -v`
 Expected: PASS — `test_context_assembles_docs_and_recall_hits` passes; the deleted test is gone; the rest still pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/cli.py tests/test_cli.py
-git -C /home/daedalus/linux/forge commit -m "feat(context): use mempalace wake-up instead of BM25"
+git -C /home/daedalus/linux/nexus add nexus/cli.py tests/test_cli.py
+git -C /home/daedalus/linux/nexus commit -m "feat(context): use mempalace wake-up instead of BM25"
 ```
 
 ---
 
-## Task 13: Rewrite `forge/policies/continuity.md`
+## Task 13: Rewrite `nexus/policies/continuity.md`
 
 **Files:**
-- Modify: `forge/policies/continuity.md`
+- Modify: `nexus/policies/continuity.md`
 
 - [ ] **Step 1: Replace the file body**
 
-Overwrite `/home/daedalus/linux/forge/forge/policies/continuity.md` with:
+Overwrite `/home/daedalus/linux/nexus/nexus/policies/continuity.md` with:
 
 ```markdown
 # Continuity Policy
@@ -1262,14 +1262,14 @@ Always pass the active repo's wing in `mempalace_search` and `mempalace_wake_up`
 
 - [ ] **Step 2: Verify the existing tests still pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest -q`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest -q`
 Expected: PASS — no test reads `continuity.md` directly.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/policies/continuity.md
-git -C /home/daedalus/linux/forge commit -m "docs(policy): concrete recall and save triggers in continuity.md"
+git -C /home/daedalus/linux/nexus add nexus/policies/continuity.md
+git -C /home/daedalus/linux/nexus commit -m "docs(policy): concrete recall and save triggers in continuity.md"
 ```
 
 ---
@@ -1281,7 +1281,7 @@ git -C /home/daedalus/linux/forge commit -m "docs(policy): concrete recall and s
 
 - [ ] **Step 1: Write the smoke test**
 
-Create `/home/daedalus/linux/forge/tests/test_smoke_mempalace.py`:
+Create `/home/daedalus/linux/nexus/tests/test_smoke_mempalace.py`:
 
 ```python
 """End-to-end smoke test against a real MemPalace install. Slow; opt-in."""
@@ -1331,14 +1331,14 @@ def test_wake_up_returns_text_after_mining_a_fixture(tmp_path):
 
 - [ ] **Step 2: Run the smoke test**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_smoke_mempalace.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_smoke_mempalace.py -v`
 Expected: PASS if `mempalace` is on PATH; skipped otherwise.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add tests/test_smoke_mempalace.py
-git -C /home/daedalus/linux/forge commit -m "test: smoke test mempalace wake-up against real palace"
+git -C /home/daedalus/linux/nexus add tests/test_smoke_mempalace.py
+git -C /home/daedalus/linux/nexus commit -m "test: smoke test mempalace wake-up against real palace"
 ```
 
 ---
@@ -1350,7 +1350,7 @@ git -C /home/daedalus/linux/forge commit -m "test: smoke test mempalace wake-up 
 
 - [ ] **Step 1: Append to `.gitignore`**
 
-Append a single line to `/home/daedalus/linux/forge/.gitignore`:
+Append a single line to `/home/daedalus/linux/nexus/.gitignore`:
 
 ```
 data/
@@ -1358,15 +1358,15 @@ data/
 
 - [ ] **Step 2: Verify git ignores the path**
 
-Run: `mkdir -p /home/daedalus/linux/forge/data && touch /home/daedalus/linux/forge/data/dummy && git -C /home/daedalus/linux/forge status --short`
+Run: `mkdir -p /home/daedalus/linux/nexus/data && touch /home/daedalus/linux/nexus/data/dummy && git -C /home/daedalus/linux/nexus status --short`
 Expected: `data/dummy` is not listed.
 
 - [ ] **Step 3: Clean up the dummy and commit**
 
 ```bash
-rm /home/daedalus/linux/forge/data/dummy
-git -C /home/daedalus/linux/forge add .gitignore
-git -C /home/daedalus/linux/forge commit -m "chore: gitignore forge data dir"
+rm /home/daedalus/linux/nexus/data/dummy
+git -C /home/daedalus/linux/nexus add .gitignore
+git -C /home/daedalus/linux/nexus commit -m "chore: gitignore nexus data dir"
 ```
 
 ---
@@ -1375,7 +1375,7 @@ git -C /home/daedalus/linux/forge commit -m "chore: gitignore forge data dir"
 
 **Files:** none (manual validation)
 
-- [ ] **Step 1: Clone MemPalace next to forge for the hook scripts**
+- [ ] **Step 1: Clone MemPalace next to nexus for the hook scripts**
 
 Run:
 
@@ -1386,52 +1386,52 @@ git clone https://github.com/MemPalace/mempalace.git mempalace-upstream
 
 Expected: clone succeeds.
 
-- [ ] **Step 2: Install MemPalace into forge's venv**
+- [ ] **Step 2: Install MemPalace into nexus's venv**
 
-Run: `/home/daedalus/linux/forge/.venv/bin/pip install mempalace`
+Run: `/home/daedalus/linux/nexus/.venv/bin/pip install mempalace`
 Expected: install succeeds; the `mempalace` CLI ends up under `.venv/bin/`.
 
-- [ ] **Step 3: Run `forge memory init` for the forge wing**
+- [ ] **Step 3: Run `nexus memory init` for the nexus wing**
 
 Run:
 
 ```bash
-cd /home/daedalus/linux/forge && .venv/bin/python -m forge.cli memory init \
+cd /home/daedalus/linux/nexus && .venv/bin/python -m nexus.cli memory init \
   --mempalace-repo /home/daedalus/linux/mempalace-upstream \
-  --forge-root /home/daedalus/linux/forge \
-  --user-prompt-hook /home/daedalus/linux/forge/hooks/forge-user-prompt-submit.sh \
+  --nexus-root /home/daedalus/linux/nexus \
+  --user-prompt-hook /home/daedalus/linux/nexus/hooks/nexus-user-prompt-submit.sh \
   --skip-backfill
 ```
 
-Expected: prints `wing: forge`, paths to settings/hooks, `backfill done: False`.
+Expected: prints `wing: nexus`, paths to settings/hooks, `backfill done: False`.
 
 - [ ] **Step 4: Inspect the resulting settings**
 
 Run: `cat ~/.claude/settings.json | python3 -m json.tool | head -40`
-Expected: JSON contains `Stop`, `PreCompact`, `UserPromptSubmit` entries with paths into `mempalace-upstream/hooks/` and `forge/hooks/`.
+Expected: JSON contains `Stop`, `PreCompact`, `UserPromptSubmit` entries with paths into `mempalace-upstream/hooks/` and `nexus/hooks/`.
 
 Run: `cat ~/.codex/hooks.json | python3 -m json.tool`
 Expected: contains `Stop` and `PreCompact` entries.
 
-- [ ] **Step 5: Run `forge memory status`**
+- [ ] **Step 5: Run `nexus memory status`**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m forge.cli memory status`
-Expected: `wing: forge`, `palace_exists: True`, `mempalace_on_path: True`.
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m nexus.cli memory status`
+Expected: `wing: nexus`, `palace_exists: True`, `mempalace_on_path: True`.
 
 - [ ] **Step 6: Run a real backfill (small scope to keep it quick)**
 
 Run:
 
 ```bash
-.venv/bin/python -m forge.cli memory init \
+.venv/bin/python -m nexus.cli memory init \
   --mempalace-repo /home/daedalus/linux/mempalace-upstream \
-  --forge-root /home/daedalus/linux/forge \
-  --user-prompt-hook /home/daedalus/linux/forge/hooks/forge-user-prompt-submit.sh
+  --nexus-root /home/daedalus/linux/nexus \
+  --user-prompt-hook /home/daedalus/linux/nexus/hooks/nexus-user-prompt-submit.sh
 ```
 
-(without `--skip-backfill`). Expected: prints `backfill done: True` after a few minutes; `data/backfill_markers/forge.done` exists.
+(without `--skip-backfill`). Expected: prints `backfill done: True` after a few minutes; `data/backfill_markers/nexus.done` exists.
 
-- [ ] **Step 7: Open a fresh Claude Code session in `~/linux/forge`**
+- [ ] **Step 7: Open a fresh Claude Code session in `~/linux/nexus`**
 
 Manual check. Confirm SessionStart output now contains both `Project docs:` and `Prior session context:` blocks. Type a prompt referencing prior phase-1 work; confirm the agent has the relevant context.
 
@@ -1442,12 +1442,12 @@ This step has no commit — it is a validation gate.
 ## Task 17: Remove the BM25 layer
 
 **Files:**
-- Delete: `forge/db.py`, `forge/query.py`, `forge/indexer.py`
+- Delete: `nexus/db.py`, `nexus/query.py`, `nexus/indexer.py`
 - Delete: `tests/test_query.py`, `tests/test_indexer.py`
-- Modify: `forge/cli.py` (drop `recall`/`index`/`stats` parsers and handlers)
-- Delete: `~/.claude/tools/forge/forge.db`
+- Modify: `nexus/cli.py` (drop `recall`/`index`/`stats` parsers and handlers)
+- Delete: `~/.claude/tools/nexus/nexus.db`
 
-- [ ] **Step 1: Drop the legacy CLI subcommands and helpers from `forge/cli.py`**
+- [ ] **Step 1: Drop the legacy CLI subcommands and helpers from `nexus/cli.py`**
 
 Remove these entries from `build_parser()`:
 
@@ -1461,41 +1461,41 @@ Remove these handler functions:
 - `_handle_index`
 - `_handle_stats`
 
-Remove `from forge.indexer import update`, `from forge.query import search`, `from forge.db import open_db` and `_db` helper. Also remove `_resolved_db_path`, `_default_db_path` if no longer referenced.
+Remove `from nexus.indexer import update`, `from nexus.query import search`, `from nexus.db import open_db` and `_db` helper. Also remove `_resolved_db_path`, `_default_db_path` if no longer referenced.
 
 - [ ] **Step 2: Delete BM25 modules and tests**
 
 Run:
 
 ```bash
-cd /home/daedalus/linux/forge
-git rm forge/db.py forge/query.py forge/indexer.py
+cd /home/daedalus/linux/nexus
+git rm nexus/db.py nexus/query.py nexus/indexer.py
 git rm tests/test_query.py tests/test_indexer.py
 ```
 
 - [ ] **Step 3: Delete the runtime DB file**
 
-Run: `rm -f ~/.claude/tools/forge/forge.db ~/.claude/tools/forge/forge.db-wal ~/.claude/tools/forge/forge.db-shm`
+Run: `rm -f ~/.claude/tools/nexus/nexus.db ~/.claude/tools/nexus/nexus.db-wal ~/.claude/tools/nexus/nexus.db-shm`
 Expected: gone, no error.
 
 - [ ] **Step 4: Run the full test suite**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest -v`
 Expected: PASS — only the new and updated tests run; nothing imports the deleted modules.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add -A
-git -C /home/daedalus/linux/forge commit -m "refactor: retire BM25 layer in favor of mempalace"
+git -C /home/daedalus/linux/nexus add -A
+git -C /home/daedalus/linux/nexus commit -m "refactor: retire BM25 layer in favor of mempalace"
 ```
 
 ---
 
-## Task 18: Extend `forge doctor` with memory checks
+## Task 18: Extend `nexus doctor` with memory checks
 
 **Files:**
-- Modify: `forge/cli.py` (`_handle_doctor`)
+- Modify: `nexus/cli.py` (`_handle_doctor`)
 - Modify: `tests/test_cli.py` (existing doctor tests must still pass)
 
 - [ ] **Step 1: Add the new test**
@@ -1504,26 +1504,26 @@ Append to `tests/test_cli.py`:
 
 ```python
 def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
-    from forge.cli import main as cli_main
+    from nexus.cli import main as cli_main
 
     workspace = tmp_path / "linux"
-    repo = workspace / "forge"
+    repo = workspace / "nexus"
     repo.mkdir(parents=True)
-    forge_root = workspace / "forge"
-    (forge_root / "data" / "palace").mkdir(parents=True)
+    nexus_root = workspace / "nexus"
+    (nexus_root / "data" / "palace").mkdir(parents=True)
     monkeypatch.setattr(
-        "forge.memory.wings.ForgeConfig.default",
+        "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    db_path = tmp_path / "forge.db"
+    db_path = tmp_path / "nexus.db"
 
     code = cli_main([
         "doctor",
         "--repo-path", str(repo),
         "--workspace-root", str(workspace),
         "--db-path", str(db_path),
-        "--forge-root", str(forge_root),
+        "--nexus-root", str(nexus_root),
     ])
     assert code == 0
     output = capsys.readouterr().out
@@ -1533,18 +1533,18 @@ def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
 
 - [ ] **Step 2: Run the test to verify failure**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py::test_doctor_reports_palace_state -v`
-Expected: FAIL — `--forge-root` flag rejected, or output lacks the new lines.
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py::test_doctor_reports_palace_state -v`
+Expected: FAIL — `--nexus-root` flag rejected, or output lacks the new lines.
 
-- [ ] **Step 3: Extend `_handle_doctor` in `forge/cli.py`**
+- [ ] **Step 3: Extend `_handle_doctor` in `nexus/cli.py`**
 
-Add `--forge-root` argument to the doctor parser:
+Add `--nexus-root` argument to the doctor parser:
 
 ```python
     doctor.add_argument(
-        "--forge-root",
+        "--nexus-root",
         type=Path,
-        default=Path("/home/daedalus/linux/forge"),
+        default=Path("/home/daedalus/linux/nexus"),
     )
 ```
 
@@ -1552,7 +1552,7 @@ Then extend `_handle_doctor` to add three more checks after the existing ones:
 
 ```python
     import shutil
-    palace_dir = Path(args.forge_root) / "data" / "palace"
+    palace_dir = Path(args.nexus_root) / "data" / "palace"
     checks.append(("palace path exists", palace_dir.is_dir()))
     checks.append(("mempalace on path", shutil.which("mempalace") is not None))
     home = Path(os.path.expanduser("~"))
@@ -1564,14 +1564,14 @@ Then extend `_handle_doctor` to add three more checks after the existing ones:
 
 - [ ] **Step 4: Run the tests to verify pass**
 
-Run: `cd /home/daedalus/linux/forge && .venv/bin/python -m pytest tests/test_cli.py -v`
+Run: `cd /home/daedalus/linux/nexus && .venv/bin/python -m pytest tests/test_cli.py -v`
 Expected: PASS — new and existing doctor tests both pass.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add forge/cli.py tests/test_cli.py
-git -C /home/daedalus/linux/forge commit -m "feat(doctor): report palace, mempalace, and hook installation state"
+git -C /home/daedalus/linux/nexus add nexus/cli.py tests/test_cli.py
+git -C /home/daedalus/linux/nexus commit -m "feat(doctor): report palace, mempalace, and hook installation state"
 ```
 
 ---
@@ -1580,12 +1580,12 @@ git -C /home/daedalus/linux/forge commit -m "feat(doctor): report palace, mempal
 
 **Files:**
 - Modify: `WORKING_MEMORY.md`
-- Modify: `~/.claude/projects/-home-daedalus-linux/memory/project_forge.md`
+- Modify: `~/.claude/projects/-home-daedalus-linux/memory/project_nexus.md`
 - Modify: `~/.claude/projects/-home-daedalus-linux/memory/MEMORY.md` if needed
 
 - [ ] **Step 1: Update `WORKING_MEMORY.md`**
 
-In `/home/daedalus/linux/forge/WORKING_MEMORY.md`:
+In `/home/daedalus/linux/nexus/WORKING_MEMORY.md`:
 - Set `Updated: 2026-05-01`
 - Move "Phase 2 (active memory, token telemetry) remains documented in the spec but intentionally deferred." → "Phase 2 active memory shipped 2026-05-01 (token telemetry dropped from scope)."
 - Replace the four "Active follow-ups" with: phase 2 done; future work is closing the Codex prompt-injection gap when upstream supports it.
@@ -1593,16 +1593,16 @@ In `/home/daedalus/linux/forge/WORKING_MEMORY.md`:
 
 - [ ] **Step 2: Update the user-side memory entry**
 
-Edit `/home/daedalus/.claude/projects/-home-daedalus-linux/memory/project_forge.md`:
+Edit `/home/daedalus/.claude/projects/-home-daedalus-linux/memory/project_nexus.md`:
 - Mark follow-up (4) as done.
-- Add a sentence: "Phase 2 (active memory) shipped 2026-05-01: MemPalace wired into Claude/Codex with per-repo wing convention and storage under `~/linux/forge/data/`. BM25 layer retired."
+- Add a sentence: "Phase 2 (active memory) shipped 2026-05-01: MemPalace wired into Claude/Codex with per-repo wing convention and storage under `~/linux/nexus/data/`. BM25 layer retired."
 - Change "How to apply" — there are no more open follow-ups in the original list; flag the Codex hook gap as something to revisit when upstream changes.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git -C /home/daedalus/linux/forge add WORKING_MEMORY.md
-git -C /home/daedalus/linux/forge commit -m "docs(memory): forge phase 2 active memory shipped"
+git -C /home/daedalus/linux/nexus add WORKING_MEMORY.md
+git -C /home/daedalus/linux/nexus commit -m "docs(memory): nexus phase 2 active memory shipped"
 ```
 
 The user-memory file lives outside any repo; no commit there.

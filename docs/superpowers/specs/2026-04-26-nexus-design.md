@@ -1,11 +1,11 @@
-# Forge Design
+# Nexus Design
 
 Date: 2026-04-26
 Status: Draft for review
 
 ## Overview
 
-`forge` is a shared local framework for coding assistants across repositories
+`nexus` is a shared local framework for coding assistants across repositories
 under `/home/daedalus/linux`.
 
 It combines:
@@ -16,7 +16,7 @@ It combines:
 - reusable skills and prompts
 - thin Claude and Codex adapters
 
-`forge` is local-first, agent-agnostic, and designed to become the common
+`nexus` is local-first, agent-agnostic, and designed to become the common
 behavior layer for both Claude and Codex when working inside the user's Linux
 workspace.
 
@@ -43,8 +43,8 @@ workspace.
 
 Phase 1 includes:
 
-- a new repo at `/home/daedalus/linux/forge`
-- migration of `claude-recall` into `forge`
+- a new repo at `/home/daedalus/linux/nexus`
+- migration of `claude-recall` into `nexus`
 - automatic session recall
 - automatic local-doc recall
 - shared agent-agnostic policies and skills/prompts
@@ -62,26 +62,26 @@ Phase 2 is deferred but explicitly designed for:
 
 Recommended layout:
 
-- `forge/recall/`
+- `nexus/recall/`
   - migrated BM25/sqlite transcript recall engine from `claude-recall`
   - incremental indexing of session transcripts
   - search and filtering APIs
-- `forge/project_context/`
+- `nexus/project_context/`
   - local-doc discovery
   - ranking and summarization helpers
   - project-state context assembly
-- `forge/policies/`
+- `nexus/policies/`
   - portable markdown policy layers
   - shared coding, review, debugging, planning, and verification rules
-- `forge/skills/`
+- `nexus/skills/`
   - reusable agent-agnostic prompt and workflow documents
-- `forge/adapters/claude/`
+- `nexus/adapters/claude/`
   - Claude-facing entry files and references
-- `forge/adapters/codex/`
+- `nexus/adapters/codex/`
   - Codex-facing entry files and references
-- `forge/cli/` or `forge/bin/`
-  - user and adapter-facing commands such as `forge recall`, `forge index`,
-    `forge context`, and `forge doctor`
+- `nexus/cli/` or `nexus/bin/`
+  - user and adapter-facing commands such as `nexus recall`, `nexus index`,
+    `nexus context`, and `nexus doctor`
 - `docs/`
   - specs, plans, migration notes, and operating documentation
 
@@ -125,12 +125,12 @@ request.
 
 ## Activation Model
 
-`forge` is globally active for repositories under `/home/daedalus/linux`.
+`nexus` is globally active for repositories under `/home/daedalus/linux`.
 
 Behavioral rule:
 
 - if the active repo is under `/home/daedalus/linux`, agents should use
-  `forge`
+  `nexus`
 - if the task is substantive, automatic recall should run
 - if the task is small or trivial, heavy recall may be skipped unless prior
   context likely matters
@@ -138,16 +138,16 @@ Behavioral rule:
 Activation happens through thin agent-specific adapters:
 
 - Claude adapter
-  - references shared `forge` policies, recall workflow, and skills
+  - references shared `nexus` policies, recall workflow, and skills
 - Codex adapter
   - references the same shared framework in Codex-compatible form
 
-The adapters should remain thin. Shared logic belongs in `forge`, not in
+The adapters should remain thin. Shared logic belongs in `nexus`, not in
 duplicated agent-specific files.
 
 ## Policies and Skills
 
-`forge` includes shared behavior layers inspired by the
+`nexus` includes shared behavior layers inspired by the
 `forrestchang/andrej-karpathy-skills` idea, but adapted for a local multi-agent
 workflow.
 
@@ -174,13 +174,13 @@ hard-coded to one tool's format.
 
 ## Migration of `claude-recall`
 
-`claude-recall` should be absorbed into `forge`, not remain as a permanent
+`claude-recall` should be absorbed into `nexus`, not remain as a permanent
 separate dependency.
 
 Migration intent:
 
 - move or port the existing BM25/sqlite indexing and query functionality into
-  `forge/recall/`
+  `nexus/recall/`
 - preserve its practical strengths:
   - no daemon
   - stdlib-friendly implementation
@@ -190,13 +190,13 @@ Migration intent:
 
 The old `claude-recall` repo should only be deleted after:
 
-- `forge` is functional
+- `nexus` is functional
 - references are repointed
 - the replacement flow has been validated
 
 ## Agent Transparency
 
-Agents should not use `forge` invisibly in ways that confuse the user.
+Agents should not use `nexus` invisibly in ways that confuse the user.
 
 When recall materially shapes the current task, the agent should briefly say so.
 This should stay concise and operational, not verbose.
@@ -213,7 +213,7 @@ This section is deferred, but must be preserved as intentional future scope.
 Future capabilities:
 
 - proactive recall
-  - agents query `forge` mid-task when they detect ambiguity, missing context,
+  - agents query `nexus` mid-task when they detect ambiguity, missing context,
     likely prior work, or follow-up risk
 - memory escalation policy
   - start with light recall, broaden only when confidence is low or continuity
@@ -253,7 +253,7 @@ Migration safety checks:
 
 - too much automatic recall can waste tokens or blur focus
 - too little recall defeats the purpose of shared continuity
-- agent-specific adapters may drift if shared logic leaks out of `forge`
+- agent-specific adapters may drift if shared logic leaks out of `nexus`
 - local-doc recall can become noisy if ranking is not constrained
 - deleting `claude-recall` too early could break trust in the migration
 
@@ -266,8 +266,8 @@ Mitigations:
 
 ## Recommended Implementation Order
 
-1. Create the `forge` repo skeleton.
-2. Import the `claude-recall` engine into `forge/recall/`.
+1. Create the `nexus` repo skeleton.
+2. Import the `claude-recall` engine into `nexus/recall/`.
 3. Add local-doc discovery and context assembly.
 4. Add shared policies and reusable skills/prompts.
 5. Add Claude and Codex adapters.

@@ -1,27 +1,27 @@
-# Forge Working Memory
+# Nexus Working Memory
 
 Updated: 2026-04-26
 
 ## Current Status
 
-Phase 1 of `forge` is complete. All ten plan tasks shipped.
+Phase 1 of `nexus` is complete. All ten plan tasks shipped.
 
 Completed and review-clean:
 - Task 1: repo skeleton
-- Task 2: migrated `claude-recall` engine into `forge`
+- Task 2: migrated `claude-recall` engine into `nexus`
 - Task 3: workspace config and `/home/daedalus/linux` activation predicate
 - Task 4: local-doc discovery and ranking
 - Task 5: context assembly
 - Task 6: phase-1 CLI
 - Task 7: shared policies (`core.md`, `continuity.md`) and skills doc
-- Task 8: thin Claude/Codex adapters under `forge/adapters/<agent>/`
+- Task 8: thin Claude/Codex adapters under `nexus/adapters/<agent>/`
 - Task 9: migration-quality regression test against fixtures
 - Task 10: retired `claude-recall`; archived to `~/.archive/claude-recall-2026-04-26/`
 
-Session activation (2026-04-30) is also live. Forge is now actually used by Claude Code sessions under `~/linux/`:
+Session activation (2026-04-30) is also live. Nexus is now actually used by Claude Code sessions under `~/linux/`:
 - `~/linux/CLAUDE.md` (workspace policy pointer) → adapter → policies via Claude Code's CLAUDE.md ancestor walk.
-- `~/.claude/hooks/forge-session-start.sh` registered in `~/.claude/settings.json` under `hooks.SessionStart` with the `"startup"` matcher.
-- Hook runs `forge.cli context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
+- `~/.claude/hooks/nexus-session-start.sh` registered in `~/.claude/settings.json` under `hooks.SessionStart` with the `"startup"` matcher.
+- Hook runs `nexus.cli context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
 - Verified end-to-end with fresh sessions in `~/linux/`: agent receives the `Project docs:` block at session start.
 
 Phase 2 (active memory, token telemetry) remains documented in the spec but intentionally deferred.
@@ -45,28 +45,28 @@ Phase 2 (active memory, token telemetry) remains documented in the spec but inte
   - `docs/superpowers/plans/`
 - CLI defaults now derive the Claude projects slug from the configured workspace root instead of hardcoding `-home-daedalus-linux`.
 - `pyproject.toml` does not declare a `[project.scripts]` entry; the test in `tests/test_config.py` enforces this. CLI is invoked via `python -m` style, not via an installed entry point.
-- Adapters under `forge/adapters/{claude,codex}/` are intentionally thin pointers to the shared policies. Do not inline policy text into adapter files.
-- `forge/policies/core.md` is the Karpathy-derived behavioral baseline (think before coding, simplicity first, surgical changes, goal-driven execution), sourced from `forrestchang/andrej-karpathy-skills` (MIT). Treat it as a core feature of forge — both Claude and Codex adapters point at it.
+- Adapters under `nexus/adapters/{claude,codex}/` are intentionally thin pointers to the shared policies. Do not inline policy text into adapter files.
+- `nexus/policies/core.md` is the Karpathy-derived behavioral baseline (think before coding, simplicity first, surgical changes, goal-driven execution), sourced from `forrestchang/andrej-karpathy-skills` (MIT). Treat it as a core feature of nexus — both Claude and Codex adapters point at it.
 
 ## Current Limitations
 
-- `forge context` still uses global recall results, not repo-scoped recall, because the migrated query layer does not yet expose a repo/cwd filter.
+- `nexus context` still uses global recall results, not repo-scoped recall, because the migrated query layer does not yet expose a repo/cwd filter.
 - The default Claude projects path derivation is still a local string-convention helper; there is no shared slug utility yet.
-- The `forge` package is not installed in its own venv (no `pip install -e .` from `~/linux/forge`), so `python -m forge.cli` only resolves the package via cwd-on-`sys.path`. The SessionStart hook works around this by `cd "$FORGE_DIR"` before invoking the CLI; cleaner long-term fix is to install the package properly.
+- The `nexus` package is not installed in its own venv (no `pip install -e .` from `~/linux/nexus`), so `python -m nexus.cli` only resolves the package via cwd-on-`sys.path`. The SessionStart hook works around this by `cd "$NEXUS_DIR"` before invoking the CLI; cleaner long-term fix is to install the package properly.
 
 ## Recent Commits (Tasks 7–10)
 
-- `7c7df6f` `docs: add shared forge policies and skills`
-- `29d48b9` `fix: drop forge.cli script entry to match self-contained packaging`
-- `22d8f89` `docs: add forge agent adapters`
-- `ec67500` `test: validate forge recall migration quality`
-- `2c6c19c` `chore: retire claude-recall in favor of forge`
-- `6876f0d` `feat: adopt karpathy guidelines as core forge policy`
+- `7c7df6f` `docs: add shared nexus policies and skills`
+- `29d48b9` `fix: drop nexus.cli script entry to match self-contained packaging`
+- `22d8f89` `docs: add nexus agent adapters`
+- `ec67500` `test: validate nexus recall migration quality`
+- `2c6c19c` `chore: retire claude-recall in favor of nexus`
+- `6876f0d` `feat: adopt karpathy guidelines as core nexus policy`
 
 ## Next Step
 
 Active follow-ups, in chosen order:
-1. ~~Wire forge into Claude Code sessions~~ — Done 2026-04-30. Spec/plan in `docs/superpowers/{specs,plans}/2026-04-30-forge-session-activation-*.md`.
+1. ~~Wire nexus into Claude Code sessions~~ — Done 2026-04-30. Spec/plan in `docs/superpowers/{specs,plans}/2026-04-30-nexus-session-activation-*.md`.
 2. Add a repo/cwd filter to the recall query layer (currently global; called out under Current Limitations).
-3. Install forge into its own venv (`pip install -e .` from `~/linux/forge`) and remove the `cd $FORGE_DIR` workaround in the SessionStart hook.
+3. Install nexus into its own venv (`pip install -e .` from `~/linux/nexus`) and remove the `cd $NEXUS_DIR` workaround in the SessionStart hook.
 4. Write a phase-2 plan for active memory and token telemetry.

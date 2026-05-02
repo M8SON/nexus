@@ -1,13 +1,13 @@
-# Forge Active Memory (Phase 2)
+# Nexus Active Memory (Phase 2)
 
 Date: 2026-05-01
 Status: Draft for review
 
 ## Overview
 
-Phase 2 of forge wires MemPalace into both supported agents (Claude Code
-and Codex CLI) under `~/linux/`, replacing forge's existing BM25/SQLite
-recall engine. Forge becomes a nexus: a small framework that distributes
+Phase 2 of nexus wires MemPalace into both supported agents (Claude Code
+and Codex CLI) under `~/linux/`, replacing nexus's existing BM25/SQLite
+recall engine. Nexus becomes a nexus: a small framework that distributes
 shared philosophy (markdown policies) and shared memory (a per-repo wing
 in a single local MemPalace palace), with thin agent-specific adapters.
 
@@ -26,16 +26,16 @@ its own.
 - Make saving happen automatically at message intervals and before
   context compaction, not only at session end.
 - Keep all storage local, with no daemons, ports, or network calls.
-- Keep forge's existing role as the philosophy/policy distributor; phase
+- Keep nexus's existing role as the philosophy/policy distributor; phase
   2 adds memory orchestration alongside it.
-- Reduce forge's surface area by retiring the BM25 layer.
+- Reduce nexus's surface area by retiring the BM25 layer.
 
 ## Non-Goals
 
 - Cross-machine sync of the palace.
 - Token-budget telemetry, warnings, or compaction tooling — explicitly
   deferred.
-- Reimplementing MemPalace functionality inside forge.
+- Reimplementing MemPalace functionality inside nexus.
 - Wiring agents outside `~/linux/`.
 - Closing the Codex/Claude prompt-injection asymmetry (deferred until
   Codex CLI ships an equivalent hook).
@@ -44,23 +44,23 @@ its own.
 
 In scope:
 
-- A `forge.memory` subpackage with three small modules: `wings`, `env`,
+- A `nexus.memory` subpackage with three small modules: `wings`, `env`,
   `install`.
-- Three new CLI subcommands: `forge memory init`, `forge memory status`,
-  and a rewritten `forge context`.
+- Three new CLI subcommands: `nexus memory init`, `nexus memory status`,
+  and a rewritten `nexus context`.
 - Storage redirection so MemPalace's bulk data lives at
-  `/home/daedalus/linux/forge/data/`.
+  `/home/daedalus/linux/nexus/data/`.
 - Hook wiring for Claude Code (`SessionStart`, `UserPromptSubmit`,
   `Stop`, `PreCompact`) and Codex CLI (`Stop`, `PreCompact`).
-- A rewrite of `forge/policies/continuity.md` with concrete recall and
+- A rewrite of `nexus/policies/continuity.md` with concrete recall and
   save triggers.
 - A one-time backfill of `~/.claude/projects/` and `~/.codex/sessions/`
   into the appropriate wings.
-- Removal of the BM25 layer: `forge/db.py`, `forge/query.py`,
-  `forge/indexer.py`, the `recall`/`index`/`stats` CLI subcommands,
+- Removal of the BM25 layer: `nexus/db.py`, `nexus/query.py`,
+  `nexus/indexer.py`, the `recall`/`index`/`stats` CLI subcommands,
   `tests/test_query.py`, `tests/test_indexer.py`, the
-  `~/.claude/tools/forge/forge.db` data file, and any references in
-  `forge/cli.py`.
+  `~/.claude/tools/nexus/nexus.db` data file, and any references in
+  `nexus/cli.py`.
 
 Out of scope (this phase):
 
@@ -73,8 +73,8 @@ Out of scope (this phase):
 ## Architecture
 
 ```
-~/linux/forge/
-├── forge/
+~/linux/nexus/
+├── nexus/
 │   ├── policies/                 # philosophy (existing; continuity.md rewritten)
 │   │   ├── core.md
 │   │   └── continuity.md
@@ -84,18 +84,18 @@ Out of scope (this phase):
 │   ├── memory/                   # NEW: MemPalace orchestration
 │   │   ├── wings.py              # cwd → wing-name resolver
 │   │   ├── env.py                # env-var assembly for MemPalace
-│   │   └── install.py            # `forge memory init` implementation
+│   │   └── install.py            # `nexus memory init` implementation
 │   └── cli.py                    # gains `memory` subcommand; recall/index/stats removed
 ├── data/                         # NEW: gitignored MemPalace storage
 │   ├── palace/                   # ChromaDB drawers + closets collections
 │   └── hook_state/               # save-hook counters and log
-└── (forge/db.py, query.py, indexer.py REMOVED)
+└── (nexus/db.py, query.py, indexer.py REMOVED)
 ```
 
 Storage redirection via env vars set at hook invocation time:
 
-- `MEMPALACE_PALACE_PATH=/home/daedalus/linux/forge/data/palace`
-- `STATE_DIR=/home/daedalus/linux/forge/data/hook_state`
+- `MEMPALACE_PALACE_PATH=/home/daedalus/linux/nexus/data/palace`
+- `STATE_DIR=/home/daedalus/linux/nexus/data/hook_state`
 - `MEMPAL_DIR=<repo-root>` so the save hook also mines the active repo's
   files on every save trigger.
 
@@ -109,12 +109,12 @@ conversation drawers; neither belongs in git.
 
 ## Wing Convention
 
-`forge.memory.wings.resolve_wing(cwd: Path) -> str | None` returns the
+`nexus.memory.wings.resolve_wing(cwd: Path) -> str | None` returns the
 wing name for a given directory, using the same managed-repo predicate
-as `ForgeConfig.is_managed_repo`:
+as `NexusConfig.is_managed_repo`:
 
 - If `cwd` is `/home/daedalus/linux/<repo>/...`, wing = `<repo>`
-  (e.g., `forge`, `miniclaw`).
+  (e.g., `nexus`, `miniclaw`).
 - If `cwd` is `/home/daedalus/linux/` itself, wing = `workspace`.
 - Otherwise, wing = `None`. The install refuses to run; SessionStart
   hook silently no-ops; UserPromptSubmit hook silently no-ops.
@@ -125,12 +125,12 @@ metadata rules are honored.
 
 ## Components
 
-### `forge.memory.wings`
+### `nexus.memory.wings`
 
 Single function: `resolve_wing(cwd: Path) -> str | None`. Pure, no I/O
 beyond `Path.resolve()`. Reuses the existing workspace-root config.
 
-### `forge.memory.env`
+### `nexus.memory.env`
 
 Single function: `mempalace_env(wing: str, repo_root: Path) -> dict[str, str]`.
 Returns the env block to pass when shelling out to MemPalace:
@@ -139,18 +139,18 @@ Returns the env block to pass when shelling out to MemPalace:
 - `STATE_DIR`
 - `MEMPAL_DIR`
 
-### `forge.memory.install`
+### `nexus.memory.install`
 
-`forge memory init [--repo <path>] [--skip-backfill]`:
+`nexus memory init [--repo <path>] [--skip-backfill]`:
 
 1. Resolve the wing for `--repo` (default `cwd`). Refuse with a clear
    message if the wing is `None`.
-2. Create `~/linux/forge/data/{palace,hook_state}/` if missing.
+2. Create `~/linux/nexus/data/{palace,hook_state}/` if missing.
 3. Idempotently merge hook entries into `~/.claude/settings.json`:
    - Keep the existing `SessionStart` entry pointing at
-     `forge-session-start.sh` (the hook script doesn't change shape).
-   - Add `UserPromptSubmit` → `forge-user-prompt-submit.sh` (new, ships
-     with forge).
+     `nexus-session-start.sh` (the hook script doesn't change shape).
+   - Add `UserPromptSubmit` → `nexus-user-prompt-submit.sh` (new, ships
+     with nexus).
    - Add `Stop` → MemPalace's `mempal_save_hook.sh`.
    - Add `PreCompact` → MemPalace's `mempal_precompact_hook.sh`.
 4. Idempotently write `~/.codex/hooks.json` with `Stop` and `PreCompact`
@@ -165,7 +165,7 @@ Returns the env block to pass when shelling out to MemPalace:
    of the install; the user can re-run.
 7. Print a short summary of what was added and what was skipped.
 
-### `forge memory status`
+### `nexus memory status`
 
 Best-effort, independent checks; reports each:
 
@@ -178,7 +178,7 @@ Best-effort, independent checks; reports each:
 Never fails the process; missing components produce diagnostic lines,
 not exit codes.
 
-### `forge context` (rewritten)
+### `nexus context` (rewritten)
 
 Replaces the BM25 query with `mempalace wake-up --wing <wing>`. Output
 shape is unchanged from today's `Project docs:` / `Prior session
@@ -191,7 +191,7 @@ context:` blocks, so no caller code changes.
 - Run `discover_context_docs(repo_path)` (unchanged).
 - Merge into the existing two-block format and print.
 
-### `forge doctor` (extended)
+### `nexus doctor` (extended)
 
 Adds checks to the existing list:
 
@@ -203,19 +203,19 @@ Adds checks to the existing list:
 
 ### Hook scripts
 
-Three forge-owned scripts under `~/.claude/hooks/`:
+Three nexus-owned scripts under `~/.claude/hooks/`:
 
-- `forge-session-start.sh` — already exists; no body change beyond what
-  the rewritten `forge context` produces.
-- `forge-user-prompt-submit.sh` — new; reads the prompt from
+- `nexus-session-start.sh` — already exists; no body change beyond what
+  the rewritten `nexus context` produces.
+- `nexus-user-prompt-submit.sh` — new; reads the prompt from
   `$CLAUDE_USER_PROMPT`, runs `mempalace search "$prompt" --wing $wing
   --limit 3` with a 5-second cap, prepends the result as additional
   context. Failures produce empty injection, never a dropped prompt.
 
 The Stop and PreCompact hooks point directly at MemPalace's shipped
-scripts; forge does not wrap them.
+scripts; nexus does not wrap them.
 
-### Policy rewrite: `forge/policies/continuity.md`
+### Policy rewrite: `nexus/policies/continuity.md`
 
 Expand from the current three-bullet stub into concrete triggers, in
 the same Karpathy-style imperative voice as `core.md`:
@@ -235,24 +235,24 @@ Codex (via the Codex adapter). One file covers both agents.
 
 ## Data Flow
 
-Typical Claude Code session in `~/linux/forge`:
+Typical Claude Code session in `~/linux/nexus`:
 
 ```
 session opens
    ↓
-SessionStart hook → forge context --repo-path .
+SessionStart hook → nexus context --repo-path .
    ↓
-   resolve_wing("/home/daedalus/linux/forge") → "forge"
+   resolve_wing("/home/daedalus/linux/nexus") → "nexus"
    discover_context_docs(repo)        → 6 doc snippets
-   mempalace wake-up --wing forge      → top-K drawers
+   mempalace wake-up --wing nexus      → top-K drawers
    ↓
    merged output injected into session context
 
 user types a message
    ↓
-UserPromptSubmit hook → forge-user-prompt-submit.sh
+UserPromptSubmit hook → nexus-user-prompt-submit.sh
    ↓
-   mempalace search "<prompt>" --wing forge --limit 3
+   mempalace search "<prompt>" --wing nexus --limit 3
    ↓
    hits prepended to prompt; agent sees enriched prompt
 
@@ -262,12 +262,12 @@ agent works; calls MCP tools when judgment + policy say to
 
 every 15 messages → Stop hook → mempal_save_hook.sh
    ↓
-   mempalace mine $TRANSCRIPT --mode convos --wing forge
+   mempalace mine $TRANSCRIPT --mode convos --wing nexus
    block AI to save key topics/decisions/quotes
 
 near context limit → PreCompact hook → mempal_precompact_hook.sh
    ↓
-   mempalace mine $TRANSCRIPT --mode convos --wing forge
+   mempalace mine $TRANSCRIPT --mode convos --wing nexus
    block AI for emergency save
 ```
 
@@ -283,7 +283,7 @@ tool calls scope to the active wing without the agent having to pass
 `wing=` every call, the `.mcp.json` blocks (Claude and Codex plugins)
 should set `MEMPALACE_DEFAULT_WING=<wing>` in the server's environment.
 This requires runtime resolution of the wing per session, which the
-forge install helper handles by writing per-repo `.mcp.json` files in
+nexus install helper handles by writing per-repo `.mcp.json` files in
 each managed repo (or the agent's project-scoped config). If MemPalace
 does not honor `MEMPALACE_DEFAULT_WING`, the install adds a thin
 wrapper script that injects `--wing` into stdio messages. Confirmation
@@ -291,13 +291,13 @@ of MemPalace's behavior here is a planning-stage check.
 
 ## Error Handling
 
-SessionStart hook (`forge context`):
+SessionStart hook (`nexus context`):
 
 - MemPalace not on PATH → log to
-  `~/.cache/forge/session-start-hook.log`, emit only the doc block.
+  `~/.cache/nexus/session-start-hook.log`, emit only the doc block.
 - Palace not initialized for this wing → emit doc block plus a single
   diagnostic line: `Prior session context: (palace not initialized for
-  wing '<name>'; run forge memory init)`.
+  wing '<name>'; run nexus memory init)`.
 - `mempalace wake-up` non-zero or > 10 s → kill, log, doc-only output.
 - The hook never blocks session start. Existing `|| exit 0` discipline
   preserved.
@@ -309,10 +309,10 @@ UserPromptSubmit hook:
   prompt.
 - 5-second wall-clock cap on the search call.
 
-Save / PreCompact hooks: MemPalace owns failure handling. Forge does
+Save / PreCompact hooks: MemPalace owns failure handling. Nexus does
 not wrap.
 
-`forge memory init`:
+`nexus memory init`:
 
 - Settings.json mutations are read-modify-write with `.bak` first;
   restore on merge failure.
@@ -321,7 +321,7 @@ not wrap.
   The marker is written only on success, so re-running retries
   backfill.
 
-`forge memory status`:
+`nexus memory status`:
 
 - Best-effort; each check independent. Always exits 0 unless invoked
   with `--strict`.
@@ -358,7 +358,7 @@ Delete:
 
 Manual validation gate (post-implementation):
 
-- Fresh Claude Code session in `~/linux/forge` produces both
+- Fresh Claude Code session in `~/linux/nexus` produces both
   `Project docs:` and `Prior session context:` blocks.
 - A prompt referencing prior work shows MemPalace hits injected by the
   UserPromptSubmit hook.
@@ -380,7 +380,7 @@ Manual validation gate (post-implementation):
   minutes. Surfaced via clear progress output and `--skip-backfill`
   escape hatch.
 - **Settings.json merge bugs**: aggressive testing plus `.bak`
-  restoration mitigate. Forge never mutates settings without a backup.
+  restoration mitigate. Nexus never mutates settings without a backup.
 - **ChromaDB cold-start latency at SessionStart**: 1–3 s on first
   session of a boot. Acceptable per the user's quality-over-speed
   preference; the SessionStart hook timeout is 60 s.
@@ -390,15 +390,15 @@ Manual validation gate (post-implementation):
 
 ## Recommended Implementation Order
 
-1. Add `forge/memory/wings.py` and tests; nothing else depends on it.
-2. Add `forge/memory/env.py` and tests.
-3. Add `forge/memory/install.py` and tests, with hooks pointed at
+1. Add `nexus/memory/wings.py` and tests; nothing else depends on it.
+2. Add `nexus/memory/env.py` and tests.
+3. Add `nexus/memory/install.py` and tests, with hooks pointed at
    MemPalace's shipped scripts.
-4. Add `forge memory init` and `forge memory status` CLI subcommands.
-5. Rewrite `forge context` to call `mempalace wake-up`; update tests.
-6. Write `forge-user-prompt-submit.sh`; integrate via install.
-7. Rewrite `forge/policies/continuity.md` with concrete triggers.
-8. Run `forge memory init` in `~/linux/forge` and `~/linux/miniclaw`;
+4. Add `nexus memory init` and `nexus memory status` CLI subcommands.
+5. Rewrite `nexus context` to call `mempalace wake-up`; update tests.
+6. Write `nexus-user-prompt-submit.sh`; integrate via install.
+7. Rewrite `nexus/policies/continuity.md` with concrete triggers.
+8. Run `nexus memory init` in `~/linux/nexus` and `~/linux/miniclaw`;
    validate hooks fire and wings stay isolated.
 9. Remove the BM25 layer and its tests; commit separately so the diff
    is reviewable.

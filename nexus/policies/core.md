@@ -2,7 +2,7 @@
 
 Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls and packaged by [forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills) (MIT).
 
-This is the baseline behavioral contract for any agent working in a forge-managed repo. Combine with `continuity.md` for recall and local-doc rules.
+This is the baseline behavioral contract for any agent working in a nexus-managed repo. Combine with `continuity.md` for recall and local-doc rules.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 

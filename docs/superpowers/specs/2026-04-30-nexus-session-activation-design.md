@@ -1,4 +1,4 @@
-# Forge Session Activation
+# Nexus Session Activation
 
 **Status:** Spec
 **Date:** 2026-04-30
@@ -6,15 +6,15 @@
 
 ## Problem
 
-Forge phase 1 shipped 2026-04-26 (BM25 session recall + local-doc discovery
+Nexus phase 1 shipped 2026-04-26 (BM25 session recall + local-doc discovery
 + shared policies + thin Claude/Codex adapters). The CLI works and the
-adapter file at `forge/adapters/claude/CLAUDE.md` exists, but **forge is
+adapter file at `nexus/adapters/claude/CLAUDE.md` exists, but **nexus is
 not actually wired into any Claude Code session**. There's no top-level
-`CLAUDE.md` referencing the adapter and no hook that runs `forge context`
+`CLAUDE.md` referencing the adapter and no hook that runs `nexus context`
 at session start. So the policies aren't loaded, and recall stays manual.
 
-This spec wires forge into Claude Code sessions under `~/linux/` so it
-delivers what the original forge spec promised: automatic policy
+This spec wires nexus into Claude Code sessions under `~/linux/` so it
+delivers what the original nexus spec promised: automatic policy
 inclusion + automatic local-doc surfacing.
 
 Active session recall (BM25 hits derived from a query) is explicitly
@@ -26,7 +26,7 @@ proactive recall.
 After this lands:
 
 1. Any Claude Code session whose `CLAUDE_PROJECT_DIR` is under
-   `/home/daedalus/linux/` automatically loads forge's policy chain
+   `/home/daedalus/linux/` automatically loads nexus's policy chain
    (`core.md` Karpathy baseline + `continuity.md`) via the adapter file.
 2. Local-doc snippets from the working repo (`WORKING_MEMORY.md`,
    `CLAUDE.md`, `AGENTS.md`, `README.md`, plus recursive
@@ -39,7 +39,7 @@ After this lands:
 ## Non-Goals
 
 - Mid-session proactive recall (phase 2).
-- Slash commands or user-invokable forge commands inside the session.
+- Slash commands or user-invokable nexus commands inside the session.
 - Token-budget telemetry / context-pressure warnings (phase 2).
 - Activation outside `~/linux/`.
 - Repo/cwd filter on the recall query layer (separate spec).
@@ -47,7 +47,7 @@ After this lands:
 ## Decisions
 
 - **Static policy entry point:** a single new file at
-  `~/linux/CLAUDE.md` that points at the existing forge adapter file.
+  `~/linux/CLAUDE.md` that points at the existing nexus adapter file.
   Claude Code's CLAUDE.md ancestor-walk picks it up for any session whose
   cwd is `~/linux/` or any descendant.
 - **No `@path` include in the CLAUDE.md** — Claude Code's include
@@ -57,17 +57,17 @@ After this lands:
   adapter is the single source of truth for what policies apply.
 - **Dynamic injection mechanism:** a SessionStart hook registered in
   `~/.claude/settings.json` that runs a small shell wrapper at
-  `~/.claude/hooks/forge-session-start.sh`. The wrapper invokes
-  `python -m forge.cli context --repo-path "$CLAUDE_PROJECT_DIR"` and
+  `~/.claude/hooks/nexus-session-start.sh`. The wrapper invokes
+  `python -m nexus.cli context --repo-path "$CLAUDE_PROJECT_DIR"` and
   prints stdout. Claude Code wraps stdout as additional session context.
 - **No-op outside `~/linux/`:** the wrapper inspects `$CLAUDE_PROJECT_DIR`
   (falling back to `$PWD`) and exits 0 silently if it's outside the
   managed workspace.
-- **Phase-1 recall behavior:** `forge context` is invoked with no `query`
+- **Phase-1 recall behavior:** `nexus context` is invoked with no `query`
   argument, so the CLI returns only local-doc snippets (no BM25 session
   hits). Phase 2 will add a proactive recall query.
 - **Failure path is silent.** All errors swallowed via
-  `2>/dev/null || exit 0`. Forge is invisible when it can't help; it
+  `2>/dev/null || exit 0`. Nexus is invisible when it can't help; it
   never blocks or breaks a session.
 
 ## Architecture
@@ -77,16 +77,16 @@ After this lands:
 ```
 ~/linux/CLAUDE.md                              ← static policy pointer
                   │
-                  └─→ /home/daedalus/linux/forge/forge/adapters/claude/CLAUDE.md
+                  └─→ /home/daedalus/linux/nexus/nexus/adapters/claude/CLAUDE.md
                                        │
                                        ├─→ ../../policies/core.md     (Karpathy baseline)
                                        └─→ ../../policies/continuity.md
 
 ~/.claude/settings.json
-   "hooks": { "SessionStart": [...forge-session-start.sh...] }
+   "hooks": { "SessionStart": [...nexus-session-start.sh...] }
                                           │
                                           ├─ checks $CLAUDE_PROJECT_DIR is under ~/linux/
-                                          ├─ runs `python -m forge.cli context --repo-path ...`
+                                          ├─ runs `python -m nexus.cli context --repo-path ...`
                                           └─ prints stdout (doc snippets) → injected as session context
 ```
 
@@ -99,28 +99,28 @@ any sub-repo's own CLAUDE.md.
 Content:
 
 ```markdown
-# Forge-managed workspace
+# Nexus-managed workspace
 
-You are working in a Forge-managed workspace. Forge is a local-first
+You are working in a Nexus-managed workspace. Nexus is a local-first
 shared assistant framework that provides session recall, local-doc
 recall, and shared agent policies for repos under /home/daedalus/linux.
 
-Read /home/daedalus/linux/forge/forge/adapters/claude/CLAUDE.md and
+Read /home/daedalus/linux/nexus/nexus/adapters/claude/CLAUDE.md and
 apply the policies it references — the Karpathy core baseline
 (core.md) and the continuity policy (continuity.md) — for any
 non-trivial work.
 
-Forge's CLI: `python -m forge.cli {recall,context,index,stats,doctor}`
-from /home/daedalus/linux/forge (its venv is at .venv there).
+Nexus's CLI: `python -m nexus.cli {recall,context,index,stats,doctor}`
+from /home/daedalus/linux/nexus (its venv is at .venv there).
 ```
 
 ### SessionStart hook script
 
-File: `~/.claude/hooks/forge-session-start.sh` (new, mode `0755`).
+File: `~/.claude/hooks/nexus-session-start.sh` (new, mode `0755`).
 
 ```bash
 #!/usr/bin/env bash
-# Forge SessionStart hook. Injects local-doc snippets (and, in phase 2,
+# Nexus SessionStart hook. Injects local-doc snippets (and, in phase 2,
 # prior-session recall hits) into Claude Code sessions starting under
 # /home/daedalus/linux. Silent no-op outside that scope or on any error.
 
@@ -133,20 +133,20 @@ case "$PROJECT_DIR" in
   *) exit 0 ;;
 esac
 
-FORGE_DIR="/home/daedalus/linux/forge"
-[ -d "$FORGE_DIR" ] || exit 0
-[ -x "$FORGE_DIR/.venv/bin/python" ] || exit 0
+NEXUS_DIR="/home/daedalus/linux/nexus"
+[ -d "$NEXUS_DIR" ] || exit 0
+[ -x "$NEXUS_DIR/.venv/bin/python" ] || exit 0
 
 # Fire-and-forget; never block session start.
-"$FORGE_DIR/.venv/bin/python" -m forge.cli context \
+"$NEXUS_DIR/.venv/bin/python" -m nexus.cli context \
     --repo-path "$PROJECT_DIR" 2>/dev/null || exit 0
 ```
 
 Notes:
 
-- Uses forge's own venv (`$FORGE_DIR/.venv/bin/python`) so the script
+- Uses nexus's own venv (`$NEXUS_DIR/.venv/bin/python`) so the script
   doesn't depend on the calling shell's Python environment.
-- `2>/dev/null || exit 0` ensures stderr from `forge.cli` doesn't leak
+- `2>/dev/null || exit 0` ensures stderr from `nexus.cli` doesn't leak
   into the session and any non-zero exit is treated as a no-op.
 - The `case` matcher on `$PROJECT_DIR` enforces the activation scope at
   the hook layer, not in the CLI. This means the CLI is unchanged.
@@ -168,7 +168,7 @@ Expected shape:
   "hooks": {
     "SessionStart": [
       {
-        "command": "/home/daedalus/.claude/hooks/forge-session-start.sh"
+        "command": "/home/daedalus/.claude/hooks/nexus-session-start.sh"
       }
     ]
   }
@@ -187,7 +187,7 @@ inject its stdout" — does not change.
    and any closer ancestor CLAUDE.md files.
 3. Claude Code dispatches the SessionStart hook.
 4. Hook script checks `$CLAUDE_PROJECT_DIR`. Outside `~/linux/`: exit 0.
-5. Inside: hook runs `python -m forge.cli context --repo-path
+5. Inside: hook runs `python -m nexus.cli context --repo-path
    "$CLAUDE_PROJECT_DIR"`. Output is doc snippets (one line per
    discovered doc).
 6. Claude Code wraps the stdout as additional session context.
@@ -214,38 +214,38 @@ Total: a few hundred tokens at most.
 | Failure                                        | Behavior                                              |
 |------------------------------------------------|-------------------------------------------------------|
 | `~/linux/CLAUDE.md` missing                    | Claude Code starts normally; no policy injection.     |
-| Adapter file missing or moved                  | Agent reads the CLAUDE.md instruction, attempts to read the adapter, fails gracefully — work proceeds without forge policies. |
-| Forge venv missing                             | Hook exits 0 silently. No injection.                  |
-| `forge.cli` raises                             | `2>/dev/null || exit 0` swallows. No injection.       |
+| Adapter file missing or moved                  | Agent reads the CLAUDE.md instruction, attempts to read the adapter, fails gracefully — work proceeds without nexus policies. |
+| Nexus venv missing                             | Hook exits 0 silently. No injection.                  |
+| `nexus.cli` raises                             | `2>/dev/null || exit 0` swallows. No injection.       |
 | `$CLAUDE_PROJECT_DIR` outside `~/linux/`       | Hook exits 0 silently. No injection.                  |
 | Hook itself errors before the case-matcher     | `set -e` would exit non-zero, but Claude Code treats failed SessionStart hooks as non-fatal. Session starts normally. |
 
-The principle: **forge is invisible when it can't help.** It never
+The principle: **nexus is invisible when it can't help.** It never
 blocks or breaks a session.
 
 ## Testing
 
-- Unit: nothing in this spec adds new code paths to forge itself; the
+- Unit: nothing in this spec adds new code paths to nexus itself; the
   hook is a thin shell wrapper around an existing CLI subcommand.
   `tests/test_context.py` and `tests/test_cli.py` already cover
-  `forge context` behavior.
+  `nexus context` behavior.
 - Manual validation, three cases:
-  1. Start `claude` in `~/linux/forge` → expect a SessionStart context
-     block containing forge's own docs (e.g. forge `README.md`,
+  1. Start `claude` in `~/linux/nexus` → expect a SessionStart context
+     block containing nexus's own docs (e.g. nexus `README.md`,
      `WORKING_MEMORY.md`, the design and plan files under
      `docs/superpowers/`).
   2. Start `claude` in `~/linux/miniclaw` → expect MiniClaw's docs in
      the SessionStart block.
   3. Start `claude` in `~` (outside `~/linux/`) → expect no SessionStart
-     forge block; only the prior `~/.claude/settings.json` behavior.
+     nexus block; only the prior `~/.claude/settings.json` behavior.
 
 ## Out of Scope
 
 - Phase 2 proactive recall (separate spec).
-- Repo/cwd filter on `forge.query` (separate spec).
-- Slash commands and ad-hoc mid-session forge invocations.
+- Repo/cwd filter on `nexus.query` (separate spec).
+- Slash commands and ad-hoc mid-session nexus invocations.
 - Symlinking the CLAUDE.md to the adapter file (`@path` include
   alternatives) — explicitly rejected for portability.
 - Activation under arbitrary `WORKSPACE_ROOT` other than `~/linux/`
-  (forge's spec has the workspace root configurable; the hook hardcodes
-  it for this phase, matching how forge itself is currently used).
+  (nexus's spec has the workspace root configurable; the hook hardcodes
+  it for this phase, matching how nexus itself is currently used).
