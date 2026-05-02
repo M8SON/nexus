@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from nexus.memory.install import merge_claude_hooks
+from nexus.memory.install import merge_claude_hooks, write_codex_hooks
 
 
 HOOK_SCRIPT = "/abs/path/mempal_save_hook.sh"
@@ -114,3 +114,30 @@ def test_backup_is_written_once_and_preserves_original(tmp_path):
         user_prompt_hook=USERPROMPT_SCRIPT,
     )
     assert backup.read_text(encoding="utf-8") == original
+
+
+def test_codex_hooks_written_with_save_and_precompact(tmp_path):
+    target = tmp_path / "hooks.json"
+    write_codex_hooks(
+        target=target,
+        save_hook=HOOK_SCRIPT,
+        precompact_hook=PRECOMPACT_SCRIPT,
+    )
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert any(e["command"] == HOOK_SCRIPT for e in data["Stop"])
+    assert any(e["command"] == PRECOMPACT_SCRIPT for e in data["PreCompact"])
+
+
+def test_codex_hooks_idempotent(tmp_path):
+    target = tmp_path / "hooks.json"
+    for _ in range(2):
+        write_codex_hooks(
+            target=target,
+            save_hook=HOOK_SCRIPT,
+            precompact_hook=PRECOMPACT_SCRIPT,
+        )
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    assert sum(1 for e in data["Stop"] if e["command"] == HOOK_SCRIPT) == 1
+    assert sum(1 for e in data["PreCompact"] if e["command"] == PRECOMPACT_SCRIPT) == 1

@@ -61,3 +61,30 @@ def _ensure_hook(
     if matcher is not None:
         entry["matcher"] = matcher
     entries.append(entry)
+
+
+def write_codex_hooks(
+    *, target: Path, save_hook: str, precompact_hook: str
+) -> None:
+    """Idempotently write/merge ~/.codex/hooks.json."""
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    raw = target.read_text(encoding="utf-8") if target.exists() else "{}"
+    try:
+        data = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        data = {}
+
+    _add_codex_entry(data, "Stop", save_hook)
+    _add_codex_entry(data, "PreCompact", precompact_hook)
+
+    _safe_write_json(target, data)
+
+
+def _add_codex_entry(data: dict, event: str, command: str) -> None:
+    entries = data.setdefault(event, [])
+    for entry in entries:
+        if str(entry.get("command", "")) == command:
+            return
+    entries.append({"type": "command", "command": command, "timeout": 30})
