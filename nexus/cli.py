@@ -6,16 +6,16 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from forge.config import ForgeConfig
-from forge.context import build_context_summary
-from forge.db import open_db
-from forge.doc_recall import discover_context_docs
-from forge.indexer import update
-from forge.query import search
+from nexus.config import NexusConfig
+from nexus.context import build_context_summary
+from nexus.db import open_db
+from nexus.doc_recall import discover_context_docs
+from nexus.indexer import update
+from nexus.query import search
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="forge")
+    parser = argparse.ArgumentParser(prog="nexus")
     subparsers = parser.add_subparsers(dest="command")
 
     recall = subparsers.add_parser("recall", help="Search indexed session history")
@@ -166,9 +166,9 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     workspace_root = (
         Path(args.workspace_root)
         if args.workspace_root is not None
-        else ForgeConfig.default().workspace_root
+        else NexusConfig.default().workspace_root
     )
-    config = ForgeConfig(workspace_root=workspace_root)
+    config = NexusConfig(workspace_root=workspace_root)
     repo_path = Path(args.repo_path)
     db_path = _resolved_db_path(args.db_path)
     db_parent_ready = db_path.parent.exists() or _parent_path_is_creatable(db_path)
@@ -218,11 +218,11 @@ def _add_project_dir_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def _default_db_path() -> Path:
-    return Path(os.path.expanduser("~")) / ".claude" / "tools" / "forge" / "forge.db"
+    return Path(os.path.expanduser("~")) / ".claude" / "tools" / "nexus" / "nexus.db"
 
 
 def _default_projects_path() -> Path:
-    workspace_root = ForgeConfig.default().workspace_root
+    workspace_root = NexusConfig.default().workspace_root
     return (
         Path(os.path.expanduser("~"))
         / ".claude"

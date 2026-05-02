@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from forge.db import open_db
-from forge.indexer import route_record, update
+from nexus.db import open_db
+from nexus.indexer import route_record, update
 
 
 @pytest.fixture
@@ -304,7 +304,7 @@ def test_malformed_line_warns_but_does_not_abort(
 
     conn = open_db(tmp_db_path)
     try:
-        with caplog.at_level("WARNING", logger="forge.indexer"):
+        with caplog.at_level("WARNING", logger="nexus.indexer"):
             n = update(conn, projects)
     finally:
         conn.close()

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from forge.cli import _default_projects_path, _workspace_projects_slug, main
-from forge.db import open_db
+from nexus.cli import _default_projects_path, _workspace_projects_slug, main
+from nexus.db import open_db
 
 
 def test_help_without_args_returns_error(capsys):
@@ -24,7 +24,7 @@ def test_index_then_stats_reports_indexed_content(tmp_path, capsys):
     transcripts.mkdir()
     fixture = Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
     (transcripts / "minimal.jsonl").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
-    db_path = tmp_path / "forge.db"
+    db_path = tmp_path / "nexus.db"
 
     assert main(["index", "--project-dir", str(transcripts), "--db-path", str(db_path)]) == 0
 
@@ -40,7 +40,7 @@ def test_index_then_stats_reports_indexed_content(tmp_path, capsys):
 def test_recall_returns_matching_hit(tmp_path, capsys):
     repo = tmp_path / "linux" / "demo"
     repo.mkdir(parents=True)
-    db_path = tmp_path / "forge.db"
+    db_path = tmp_path / "nexus.db"
     conn = open_db(db_path)
     conn.execute(
         "INSERT INTO turns (session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
@@ -77,7 +77,7 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, capsys):
     repo = tmp_path / "linux" / "demo"
     repo.mkdir(parents=True)
     (repo / "README.md").write_text("Wake offload overview", encoding="utf-8")
-    db_path = tmp_path / "forge.db"
+    db_path = tmp_path / "nexus.db"
     conn = open_db(db_path)
     conn.execute(
         "INSERT INTO turns (session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
@@ -159,7 +159,7 @@ def test_workspace_projects_slug_is_derived_from_workspace_root():
 def test_default_projects_path_uses_workspace_root_slug(tmp_path, monkeypatch):
     home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setattr("forge.cli.ForgeConfig.default", classmethod(lambda cls: cls(workspace_root=Path("/tmp/custom/workspace"))))
+    monkeypatch.setattr("nexus.cli.NexusConfig.default", classmethod(lambda cls: cls(workspace_root=Path("/tmp/custom/workspace"))))
 
     assert _default_projects_path() == (
         home / ".claude" / "projects" / "-tmp-custom-workspace"
@@ -169,7 +169,7 @@ def test_default_projects_path_uses_workspace_root_slug(tmp_path, monkeypatch):
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
     repo = tmp_path / "other" / "demo"
     repo.mkdir(parents=True)
-    db_path = tmp_path / "forge.db"
+    db_path = tmp_path / "nexus.db"
 
     assert (
         main(
@@ -211,5 +211,5 @@ def test_doctor_uses_default_db_path_when_omitted(tmp_path, monkeypatch, capsys)
     )
 
     output = capsys.readouterr().out
-    assert f"db path: {home / '.claude' / 'tools' / 'forge' / 'forge.db'}" in output
+    assert f"db path: {home / '.claude' / 'tools' / 'nexus' / 'nexus.db'}" in output
     assert "db path usable: yes" in output

@@ -1,4 +1,4 @@
-from forge.doc_recall import discover_context_docs
+from nexus.doc_recall import discover_context_docs
 
 
 def test_discovers_priority_project_docs(tmp_path):

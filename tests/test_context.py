@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from forge.context import build_context_summary
+from nexus.context import build_context_summary
 
 
 def test_builds_combined_summary_from_hits_and_docs():
@@ -32,5 +32,5 @@ def test_collapses_multiline_entries_and_drops_blank_items():
 
 def test_agent_adapters_exist():
     root = Path(__file__).resolve().parents[1]
-    assert (root / "forge" / "adapters" / "claude" / "CLAUDE.md").exists()
-    assert (root / "forge" / "adapters" / "codex" / "AGENTS.md").exists()
+    assert (root / "nexus" / "adapters" / "claude" / "CLAUDE.md").exists()
+    assert (root / "nexus" / "adapters" / "codex" / "AGENTS.md").exists()

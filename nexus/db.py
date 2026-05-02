@@ -1,5 +1,5 @@
 """
-Sqlite schema and connection helpers for forge.
+Sqlite schema and connection helpers for nexus.
 
 Two relational tables (files, turns) plus an FTS5 virtual table mirroring
 turns.content for BM25 search. INSERT/DELETE triggers keep the FTS5 table

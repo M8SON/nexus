@@ -1,5 +1,5 @@
 """
-JSONL ingestion for forge.
+JSONL ingestion for nexus.
 
 route_record() is a pure function that turns one parsed Claude Code transcript
 record into zero or more Turn objects. update() drives incremental indexing

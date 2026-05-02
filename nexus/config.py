@@ -3,11 +3,11 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class ForgeConfig:
+class NexusConfig:
     workspace_root: Path
 
     @classmethod
-    def default(cls) -> "ForgeConfig":
+    def default(cls) -> "NexusConfig":
         return cls(workspace_root=Path("/home/daedalus/linux"))
 
     def is_managed_repo(self, repo_path: Path) -> bool:

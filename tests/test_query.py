@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from forge.db import open_db
-from forge.indexer import update
-from forge.query import _run_search, parse_since, search
+from nexus.db import open_db
+from nexus.indexer import update
+from nexus.query import _run_search, parse_since, search
 
 
 @pytest.fixture
@@ -254,9 +254,9 @@ def test_parse_since_unknown_returns_none():
 def test_cwd_filter_scopes_results_to_repo(tmp_path):
     conn = open_db(tmp_path / "index.db")
     rows = [
-        ("s-forge", 0, "uA", "2026-04-30T10:00:00Z", "user", "wake offload notes", "/home/daedalus/linux/forge"),
+        ("s-nexus", 0, "uA", "2026-04-30T10:00:00Z", "user", "wake offload notes", "/home/daedalus/linux/nexus"),
         ("s-mini", 0, "uB", "2026-04-30T10:01:00Z", "user", "wake offload notes", "/home/daedalus/linux/miniclaw"),
-        ("s-sub", 0, "uC", "2026-04-30T10:02:00Z", "user", "wake offload notes", "/home/daedalus/linux/forge/forge"),
+        ("s-sub", 0, "uC", "2026-04-30T10:02:00Z", "user", "wake offload notes", "/home/daedalus/linux/nexus/nexus"),
         ("s-other", 0, "uD", "2026-04-30T10:03:00Z", "user", "wake offload notes", "/tmp/elsewhere"),
         ("s-null", 0, "uE", "2026-04-30T10:04:00Z", "user", "wake offload notes", None),
     ]
@@ -269,10 +269,10 @@ def test_cwd_filter_scopes_results_to_repo(tmp_path):
         )
     conn.commit()
 
-    hits = search(conn, "wake", cwd="/home/daedalus/linux/forge")
+    hits = search(conn, "wake", cwd="/home/daedalus/linux/nexus")
     sessions = sorted(h.session_id for h in hits)
 
-    assert sessions == ["s-forge", "s-sub"]
+    assert sessions == ["s-nexus", "s-sub"]
 
 
 def test_cwd_filter_none_preserves_global_search(tmp_path):
