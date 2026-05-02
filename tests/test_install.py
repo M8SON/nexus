@@ -89,3 +89,28 @@ def test_merge_writes_backup_before_change(tmp_path):
     backup = settings.with_suffix(settings.suffix + ".bak")
     assert backup.exists()
     assert backup.read_text(encoding="utf-8") == original
+
+
+def test_backup_is_written_once_and_preserves_original(tmp_path):
+    settings = tmp_path / "settings.json"
+    original = '{"hooks": {}}'
+    settings.write_text(original, encoding="utf-8")
+
+    # First run captures original.
+    merge_claude_hooks(
+        settings_path=settings,
+        save_hook=HOOK_SCRIPT,
+        precompact_hook=PRECOMPACT_SCRIPT,
+        user_prompt_hook=USERPROMPT_SCRIPT,
+    )
+    backup = settings.with_suffix(settings.suffix + ".bak")
+    assert backup.read_text(encoding="utf-8") == original
+
+    # Second run must NOT overwrite the backup with the now-modified settings.
+    merge_claude_hooks(
+        settings_path=settings,
+        save_hook=HOOK_SCRIPT,
+        precompact_hook=PRECOMPACT_SCRIPT,
+        user_prompt_hook=USERPROMPT_SCRIPT,
+    )
+    assert backup.read_text(encoding="utf-8") == original
