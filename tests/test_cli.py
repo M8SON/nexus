@@ -101,3 +101,30 @@ def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
     assert code == 0
     output = capsys.readouterr().out
     assert "wing: nexus" in output
+
+
+def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    repo = workspace / "nexus"
+    repo.mkdir(parents=True)
+    nexus_root = workspace / "nexus"
+    (nexus_root / "data" / "palace").mkdir(parents=True)
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    code = cli_main([
+        "doctor",
+        "--repo-path", str(repo),
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+    assert code == 0
+    output = capsys.readouterr().out
+    assert "palace path exists: yes" in output
+    assert "mempalace on path:" in output
+    assert "claude hooks installed:" in output

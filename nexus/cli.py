@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -40,6 +41,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path.cwd(),
         help="Repository path to validate",
+    )
+    doctor.add_argument(
+        "--nexus-root",
+        type=Path,
+        default=Path("/home/daedalus/linux/nexus"),
+        help="Root of the nexus repo (where data/palace lives)",
     )
     doctor.set_defaults(handler=_handle_doctor)
 
@@ -135,17 +142,25 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     config = NexusConfig(workspace_root=workspace_root)
     repo_path = Path(args.repo_path)
 
-    checks = [
+    fatal_checks = [
         ("workspace exists", workspace_root.exists()),
         ("repo exists", repo_path.exists()),
         ("managed repo", config.is_managed_repo(repo_path) if repo_path.exists() else False),
     ]
 
-    for label, ok in checks:
+    palace_dir = Path(args.nexus_root) / "data" / "palace"
+    home = Path(os.path.expanduser("~"))
+    info_checks = [
+        ("palace path exists", palace_dir.is_dir()),
+        ("mempalace on path", shutil.which("mempalace") is not None),
+        ("claude hooks installed", (home / ".claude" / "settings.json").exists()),
+    ]
+
+    for label, ok in fatal_checks + info_checks:
         print(f"{label}: {'yes' if ok else 'no'}")
     print(f"workspace root: {workspace_root}")
     print(f"repo path: {repo_path}")
-    return 0 if all(ok for _, ok in checks) else 1
+    return 0 if all(ok for _, ok in fatal_checks) else 1
 
 
 def _add_project_dir_arg(parser: argparse.ArgumentParser) -> None:
