@@ -75,6 +75,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor.set_defaults(handler=_handle_doctor)
 
+    memory = subparsers.add_parser("memory", help="MemPalace orchestration")
+    memory_sub = memory.add_subparsers(dest="memory_command")
+
+    mem_init = memory_sub.add_parser("init", help="Wire MemPalace into both agents")
+    mem_init.add_argument("--repo", type=Path, default=None,
+                          help="Repo to initialize the wing for (default: cwd)")
+    mem_init.add_argument("--mempalace-repo", type=Path, required=True,
+                          help="Path to a local MemPalace clone (for hook scripts)")
+    mem_init.add_argument("--nexus-root", type=Path,
+                          default=Path("/home/daedalus/linux/nexus"),
+                          help="Root of the nexus repo (where data/ lives)")
+    mem_init.add_argument("--user-prompt-hook", type=Path, required=True,
+                          help="Path to the nexus UserPromptSubmit hook script")
+    mem_init.add_argument("--skip-backfill", action="store_true")
+    mem_init.set_defaults(handler=_handle_memory_init)
+
     return parser
 
 
@@ -266,6 +282,29 @@ def _read_doc_snippet(path: Path) -> str:
         if snippet:
             return f"{path.name}: {snippet}"
     return path.name
+
+
+def _handle_memory_init(args: argparse.Namespace) -> int:
+    from nexus.memory.install import init as install_init
+
+    repo = Path(args.repo) if args.repo else Path.cwd()
+    try:
+        result = install_init(
+            repo=repo,
+            mempalace_repo=Path(args.mempalace_repo),
+            nexus_root=Path(args.nexus_root),
+            user_prompt_hook=Path(args.user_prompt_hook),
+            skip_backfill=args.skip_backfill,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        print(f"nexus memory init failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"wing: {result['wing']}")
+    print(f"claude settings: {result['claude_settings']}")
+    print(f"codex hooks:     {result['codex_hooks']}")
+    print(f"backfill done:   {result['backfill_done']}")
+    return 0
 
 
 if __name__ == "__main__":

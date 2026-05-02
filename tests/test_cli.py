@@ -213,3 +213,38 @@ def test_doctor_uses_default_db_path_when_omitted(tmp_path, monkeypatch, capsys)
     output = capsys.readouterr().out
     assert f"db path: {home / '.claude' / 'tools' / 'nexus' / 'nexus.db'}" in output
     assert "db path usable: yes" in output
+
+
+def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    repo = workspace / "nexus"
+    repo.mkdir(parents=True)
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+
+    fake_home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.chdir(repo)
+
+    mempalace = tmp_path / "mempalace_repo"
+    (mempalace / "hooks").mkdir(parents=True)
+    (mempalace / "hooks" / "mempal_save_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+    (mempalace / "hooks" / "mempal_precompact_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+
+    user_prompt_hook = tmp_path / "u.sh"
+    user_prompt_hook.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+
+    code = cli_main([
+        "memory", "init",
+        "--mempalace-repo", str(mempalace),
+        "--nexus-root", str(workspace / "nexus"),
+        "--user-prompt-hook", str(user_prompt_hook),
+        "--skip-backfill",
+    ])
+    assert code == 0
+    output = capsys.readouterr().out
+    assert "wing: nexus" in output
