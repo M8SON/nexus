@@ -91,6 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
     mem_init.add_argument("--skip-backfill", action="store_true")
     mem_init.set_defaults(handler=_handle_memory_init)
 
+    mem_status = memory_sub.add_parser("status", help="Report memory wiring state")
+    mem_status.add_argument("--repo", type=Path, default=None)
+    mem_status.add_argument("--nexus-root", type=Path,
+                            default=Path("/home/daedalus/linux/nexus"))
+    mem_status.set_defaults(handler=_handle_memory_status)
+
     return parser
 
 
@@ -304,6 +310,16 @@ def _handle_memory_init(args: argparse.Namespace) -> int:
     print(f"claude settings: {result['claude_settings']}")
     print(f"codex hooks:     {result['codex_hooks']}")
     print(f"backfill done:   {result['backfill_done']}")
+    return 0
+
+
+def _handle_memory_status(args: argparse.Namespace) -> int:
+    from nexus.memory.status import status_report
+
+    repo = Path(args.repo) if args.repo else Path.cwd()
+    report = status_report(repo=repo, nexus_root=Path(args.nexus_root))
+    for key, value in report.items():
+        print(f"{key}: {value}")
     return 0
 
 
