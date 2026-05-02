@@ -73,65 +73,33 @@ def test_recall_refreshes_from_default_transcript_dir(tmp_path, monkeypatch, cap
     assert "hello world" in output
 
 
-def test_context_assembles_docs_and_recall_hits(tmp_path, capsys):
-    repo = tmp_path / "linux" / "demo"
+def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    repo = workspace / "demo"
     repo.mkdir(parents=True)
     (repo / "README.md").write_text("Wake offload overview", encoding="utf-8")
-    db_path = tmp_path / "nexus.db"
-    conn = open_db(db_path)
-    conn.execute(
-        "INSERT INTO turns (session_id, file_path, turn_index, uuid, ts, role, content, cwd) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("session-1", "/tmp/demo.jsonl", 0, "u1", "2026-04-26T10:00:00Z", "assistant", "Wake offload was completed", str(repo)),
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
     )
-    conn.commit()
-    conn.close()
 
-    assert (
-        main(
-            [
-                "context",
-                "wake",
-                "--repo-path",
-                str(repo),
-                "--db-path",
-                str(db_path),
-            ]
-        )
-        == 0
-    )
+    captured_calls = []
+    def fake_wake_up(wing, env):
+        captured_calls.append((wing, env))
+        return "Wake offload was completed"
+    monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
+
+    code = cli_main(["context", "wake", "--repo-path", str(repo)])
+    assert code == 0
 
     output = capsys.readouterr().out
     assert "Prior session context:" in output
-    assert "Project docs:" in output
     assert "Wake offload was completed" in output
-    assert "Wake offload overview" in output
-
-
-def test_context_refreshes_from_transcripts_before_query(tmp_path, monkeypatch, capsys):
-    home = tmp_path / "home"
-    monkeypatch.setenv("HOME", str(home))
-    transcripts = home / ".claude" / "projects" / "-home-daedalus-linux"
-    transcripts.mkdir(parents=True)
-    repo = tmp_path / "linux" / "demo"
-    repo.mkdir(parents=True)
-    (repo / "README.md").write_text("Project readme context", encoding="utf-8")
-
-    fixture_text = (
-        Path(__file__).resolve().parent / "fixtures" / "minimal.jsonl"
-    ).read_text(encoding="utf-8")
-    (transcripts / "minimal.jsonl").write_text(
-        fixture_text.replace('"cwd":"/x"', f'"cwd":"{repo}"'),
-        encoding="utf-8",
-    )
-
-    assert main(["context", "hello", "--repo-path", str(repo)]) == 0
-
-    output = capsys.readouterr().out
-    assert "Prior session context:" in output
-    assert "hello world" in output
     assert "Project docs:" in output
-    assert "Project readme context" in output
+    assert "Wake offload overview" in output
+    assert captured_calls and captured_calls[0][0] == "demo"
 
 
 def test_index_defaults_to_transcript_projects_path(tmp_path, monkeypatch, capsys):

@@ -165,23 +165,42 @@ def _handle_stats(args: argparse.Namespace) -> int:
 
 
 def _handle_context(args: argparse.Namespace) -> int:
-    repo_path = Path(args.repo_path)
-    with _db(args.db_path) as conn:
-        update(conn, _projects_path(args.project_dir))
-        hits = (
-            search(conn, args.query, limit=args.limit, cwd=str(repo_path))
-            if args.query
-            else []
-        )
+    from nexus.memory.wings import resolve_wing
+    from nexus.memory.env import mempalace_env
 
-    recall_hits = [hit.content for hit in hits]
-    doc_snippets = [_read_doc_snippet(path) for path in discover_context_docs(repo_path)]
+    repo_path = Path(args.repo_path).resolve()
+    wing = resolve_wing(repo_path)
+
+    recall_hits: list[str] = []
+    if wing:
+        env = mempalace_env(wing=wing, repo_root=repo_path)
+        try:
+            output = _mempalace_wake_up(wing=wing, env=env)
+        except Exception:
+            output = ""
+        if output.strip():
+            recall_hits = [output.strip()]
+
+    doc_snippets = [_read_doc_snippet(p) for p in discover_context_docs(repo_path)]
     summary = build_context_summary(recall_hits=recall_hits, doc_snippets=doc_snippets)
-    if summary:
-        print(summary)
-    else:
-        print("No local context found.")
+    print(summary or "No local context found.")
     return 0
+
+
+def _mempalace_wake_up(wing: str, env: dict[str, str]) -> str:
+    """Run `mempalace wake-up --wing <wing>` with a 10s timeout. Empty on failure."""
+    import subprocess
+    full_env = {**os.environ, **env}
+    try:
+        proc = subprocess.run(
+            ["mempalace", "wake-up", "--wing", wing],
+            capture_output=True, text=True, timeout=10, env=full_env,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return proc.stdout
 
 
 def _handle_doctor(args: argparse.Namespace) -> int:
