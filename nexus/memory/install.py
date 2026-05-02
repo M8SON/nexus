@@ -1,10 +1,14 @@
 """Install MemPalace + nexus hooks into Claude Code and Codex CLI configs."""
 import json
+import logging
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from nexus.memory.wings import resolve_wing
+
+log = logging.getLogger(__name__)
 
 
 def _safe_write_json(path: Path, data: dict) -> None:
@@ -165,7 +169,6 @@ def init(
 
 def _run_backfill(wing: str, marker: Path) -> bool:
     """One-time mine of past Claude + Codex transcripts into this wing."""
-    import subprocess
     home = Path(os.path.expanduser("~"))
     targets = [
         home / ".claude" / "projects",
@@ -181,7 +184,14 @@ def _run_backfill(wing: str, marker: Path) -> bool:
                 check=True,
                 timeout=600,
             )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            log.warning("mempalace mine failed for %s: %s", target, exc)
+            ok = False
+        except FileNotFoundError:
+            log.warning("mempalace binary not found on PATH; skipping backfill of %s", target)
+            ok = False
+        except OSError as exc:
+            log.warning("OS error mining %s: %s", target, exc)
             ok = False
     if ok:
         marker.write_text("done\n", encoding="utf-8")
