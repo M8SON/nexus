@@ -88,3 +88,21 @@ def _add_codex_entry(data: dict, event: str, command: str) -> None:
         if str(entry.get("command", "")) == command:
             return
     entries.append({"type": "command", "command": command, "timeout": 30})
+
+
+def locate_mempalace_hooks(*, repo_root: Path) -> tuple[Path, Path]:
+    """Find MemPalace's shipped hook scripts under repo_root.
+
+    Looks for `hooks/mempal_save_hook.sh` and `hooks/mempal_precompact_hook.sh`
+    relative to repo_root. Designed for when the user has cloned the MemPalace
+    repo locally; supplied via --mempalace-repo on the CLI in production.
+    """
+    repo_root = Path(repo_root)
+    save = repo_root / "hooks" / "mempal_save_hook.sh"
+    precompact = repo_root / "hooks" / "mempal_precompact_hook.sh"
+    if not save.exists() or not precompact.exists():
+        raise FileNotFoundError(
+            f"MemPalace hooks not found under {repo_root}/hooks. "
+            f"Pass --mempalace-repo to nexus memory init."
+        )
+    return save, precompact

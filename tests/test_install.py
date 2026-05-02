@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from nexus.memory.install import merge_claude_hooks, write_codex_hooks
+from nexus.memory.install import locate_mempalace_hooks, merge_claude_hooks, write_codex_hooks
 
 
 HOOK_SCRIPT = "/abs/path/mempal_save_hook.sh"
@@ -141,3 +141,24 @@ def test_codex_hooks_idempotent(tmp_path):
     data = json.loads(target.read_text(encoding="utf-8"))
     assert sum(1 for e in data["Stop"] if e["command"] == HOOK_SCRIPT) == 1
     assert sum(1 for e in data["PreCompact"] if e["command"] == PRECOMPACT_SCRIPT) == 1
+
+
+def test_locate_mempalace_hooks_finds_via_python_import(tmp_path, monkeypatch):
+    fake_pkg = tmp_path / "mempalace"
+    fake_pkg.mkdir()
+    (fake_pkg / "__init__.py").write_text("", encoding="utf-8")
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "mempal_save_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+    (hooks_dir / "mempal_precompact_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+
+    save, precompact = locate_mempalace_hooks(repo_root=tmp_path)
+
+    assert save == hooks_dir / "mempal_save_hook.sh"
+    assert precompact == hooks_dir / "mempal_precompact_hook.sh"
+
+
+def test_locate_raises_when_not_found(tmp_path):
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        locate_mempalace_hooks(repo_root=tmp_path)
