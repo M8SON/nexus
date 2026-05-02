@@ -162,3 +162,60 @@ def test_locate_raises_when_not_found(tmp_path):
     import pytest
     with pytest.raises(FileNotFoundError):
         locate_mempalace_hooks(repo_root=tmp_path)
+
+
+from nexus.memory.install import init
+
+
+def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
+    workspace = tmp_path / "linux"
+    repo = workspace / "nexus"
+    repo.mkdir(parents=True)
+    nexus_root = workspace / "nexus"
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+
+    mempalace = tmp_path / "mempalace_repo"
+    (mempalace / "hooks").mkdir(parents=True)
+    (mempalace / "hooks" / "mempal_save_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+    (mempalace / "hooks" / "mempal_precompact_hook.sh").write_text("#!/bin/bash", encoding="utf-8")
+
+    fake_home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(fake_home))
+    user_prompt_hook = tmp_path / "nexus-user-prompt-submit.sh"
+    user_prompt_hook.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+
+    result = init(
+        repo=repo,
+        mempalace_repo=mempalace,
+        nexus_root=nexus_root,
+        user_prompt_hook=user_prompt_hook,
+        skip_backfill=True,
+    )
+
+    assert result["wing"] == "nexus"
+    assert (nexus_root / "data" / "palace").is_dir()
+    assert (nexus_root / "data" / "hook_state").is_dir()
+    assert (fake_home / ".claude" / "settings.json").exists()
+    assert (fake_home / ".codex" / "hooks.json").exists()
+
+
+def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):
+    workspace = tmp_path / "linux"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+
+    import pytest
+    with pytest.raises(ValueError, match="not under workspace"):
+        init(
+            repo=tmp_path / "outside",
+            mempalace_repo=tmp_path / "mempalace_repo",
+            nexus_root=workspace / "nexus",
+            user_prompt_hook=tmp_path / "u.sh",
+            skip_backfill=True,
+        )

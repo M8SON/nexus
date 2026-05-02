@@ -4,6 +4,8 @@ import os
 import shutil
 from pathlib import Path
 
+from nexus.memory.wings import resolve_wing
+
 
 def _safe_write_json(path: Path, data: dict) -> None:
     """Atomically write `data` as JSON to `path`, with a once-only `.bak` of the original.
@@ -106,3 +108,81 @@ def locate_mempalace_hooks(*, repo_root: Path) -> tuple[Path, Path]:
             f"Pass --mempalace-repo to nexus memory init."
         )
     return save, precompact
+
+
+def init(
+    *,
+    repo: Path,
+    mempalace_repo: Path,
+    nexus_root: Path,
+    user_prompt_hook: Path,
+    skip_backfill: bool = False,
+) -> dict:
+    """Top-level install: data dirs, claude/codex hook merges, optional backfill."""
+    repo = Path(repo).resolve()
+    nexus_root = Path(nexus_root)
+    wing = resolve_wing(repo)
+    if wing is None:
+        raise ValueError(f"{repo} is not under workspace")
+
+    (nexus_root / "data" / "palace").mkdir(parents=True, exist_ok=True)
+    (nexus_root / "data" / "hook_state").mkdir(parents=True, exist_ok=True)
+
+    save, precompact = locate_mempalace_hooks(repo_root=mempalace_repo)
+
+    home = Path(os.path.expanduser("~"))
+    claude_settings = home / ".claude" / "settings.json"
+    claude_settings.parent.mkdir(parents=True, exist_ok=True)
+    if not claude_settings.exists():
+        claude_settings.write_text("{}", encoding="utf-8")
+    merge_claude_hooks(
+        settings_path=claude_settings,
+        save_hook=str(save),
+        precompact_hook=str(precompact),
+        user_prompt_hook=str(user_prompt_hook),
+    )
+
+    codex_hooks = home / ".codex" / "hooks.json"
+    write_codex_hooks(
+        target=codex_hooks,
+        save_hook=str(save),
+        precompact_hook=str(precompact),
+    )
+
+    backfill_done = False
+    marker = nexus_root / "data" / "backfill_markers" / f"{wing}.done"
+    if not skip_backfill and not marker.exists():
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        backfill_done = _run_backfill(wing=wing, marker=marker)
+
+    return {
+        "wing": wing,
+        "claude_settings": str(claude_settings),
+        "codex_hooks": str(codex_hooks),
+        "backfill_done": backfill_done,
+    }
+
+
+def _run_backfill(wing: str, marker: Path) -> bool:
+    """One-time mine of past Claude + Codex transcripts into this wing."""
+    import subprocess
+    home = Path(os.path.expanduser("~"))
+    targets = [
+        home / ".claude" / "projects",
+        home / ".codex" / "sessions",
+    ]
+    ok = True
+    for target in targets:
+        if not target.exists():
+            continue
+        try:
+            subprocess.run(
+                ["mempalace", "mine", str(target), "--mode", "convos", "--wing", wing],
+                check=True,
+                timeout=600,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            ok = False
+    if ok:
+        marker.write_text("done\n", encoding="utf-8")
+    return ok
