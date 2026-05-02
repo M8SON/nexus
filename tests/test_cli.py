@@ -31,8 +31,8 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
     )
 
     captured_calls = []
-    def fake_wake_up(wing, env):
-        captured_calls.append((wing, env))
+    def fake_wake_up(wing):
+        captured_calls.append(wing)
         return "Wake offload was completed"
     monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
 
@@ -44,7 +44,7 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
     assert "Wake offload was completed" in output
     assert "Project docs:" in output
     assert "Wake offload overview" in output
-    assert captured_calls and captured_calls[0][0] == "demo"
+    assert captured_calls == ["demo"]
 
 
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
@@ -109,19 +109,18 @@ def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
     workspace = tmp_path / "linux"
     repo = workspace / "nexus"
     repo.mkdir(parents=True)
-    nexus_root = workspace / "nexus"
-    (nexus_root / "data" / "palace").mkdir(parents=True)
+    fake_home = tmp_path / "home"
+    (fake_home / ".mempalace" / "palace").mkdir(parents=True)
     monkeypatch.setattr(
         "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("HOME", str(fake_home))
 
     code = cli_main([
         "doctor",
         "--repo-path", str(repo),
         "--workspace-root", str(workspace),
-        "--nexus-root", str(nexus_root),
     ])
     assert code == 0
     output = capsys.readouterr().out

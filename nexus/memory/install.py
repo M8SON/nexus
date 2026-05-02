@@ -129,9 +129,6 @@ def init(
     if wing is None:
         raise ValueError(f"{repo} is not under workspace")
 
-    (nexus_root / "data" / "palace").mkdir(parents=True, exist_ok=True)
-    (nexus_root / "data" / "hook_state").mkdir(parents=True, exist_ok=True)
-
     save, precompact = locate_mempalace_hooks(repo_root=mempalace_repo)
 
     home = Path(os.path.expanduser("~"))

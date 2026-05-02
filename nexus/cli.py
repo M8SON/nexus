@@ -42,12 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path.cwd(),
         help="Repository path to validate",
     )
-    doctor.add_argument(
-        "--nexus-root",
-        type=Path,
-        default=Path("/home/daedalus/linux/nexus"),
-        help="Root of the nexus repo (where data/palace lives)",
-    )
     doctor.set_defaults(handler=_handle_doctor)
 
     memory = subparsers.add_parser("memory", help="MemPalace orchestration")
@@ -96,16 +90,14 @@ def main(argv: list[str] | None = None) -> int:
 
 def _handle_context(args: argparse.Namespace) -> int:
     from nexus.memory.wings import resolve_wing
-    from nexus.memory.env import mempalace_env
 
     repo_path = Path(args.repo_path).resolve()
     wing = resolve_wing(repo_path)
 
     recall_hits: list[str] = []
     if wing:
-        env = mempalace_env(wing=wing, repo_root=repo_path)
         try:
-            output = _mempalace_wake_up(wing=wing, env=env)
+            output = _mempalace_wake_up(wing=wing)
         except Exception:
             output = ""
         if output.strip():
@@ -117,14 +109,13 @@ def _handle_context(args: argparse.Namespace) -> int:
     return 0
 
 
-def _mempalace_wake_up(wing: str, env: dict[str, str]) -> str:
+def _mempalace_wake_up(wing: str) -> str:
     """Run `mempalace wake-up --wing <wing>` with a 10s timeout. Empty on failure."""
     import subprocess
-    full_env = {**os.environ, **env}
     try:
         proc = subprocess.run(
             ["mempalace", "wake-up", "--wing", wing],
-            capture_output=True, text=True, timeout=10, env=full_env,
+            capture_output=True, text=True, timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return ""
@@ -148,8 +139,8 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         ("managed repo", config.is_managed_repo(repo_path) if repo_path.exists() else False),
     ]
 
-    palace_dir = Path(args.nexus_root) / "data" / "palace"
     home = Path(os.path.expanduser("~"))
+    palace_dir = home / ".mempalace" / "palace"
     info_checks = [
         ("palace path exists", palace_dir.is_dir()),
         ("mempalace on path", shutil.which("mempalace") is not None),

@@ -9,7 +9,9 @@ def test_status_reports_palace_existence(tmp_path, monkeypatch):
     repo = workspace / "nexus"
     repo.mkdir(parents=True)
     nexus_root = workspace / "nexus"
-    (nexus_root / "data" / "palace").mkdir(parents=True)
+    fake_home = tmp_path / "home"
+    (fake_home / ".mempalace" / "palace").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setattr(
         "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
@@ -24,6 +26,9 @@ def test_status_handles_missing_palace(tmp_path, monkeypatch):
     workspace = tmp_path / "linux"
     repo = workspace / "nexus"
     repo.mkdir(parents=True)
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setattr(
         "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),

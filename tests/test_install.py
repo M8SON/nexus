@@ -196,8 +196,6 @@ def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
     )
 
     assert result["wing"] == "nexus"
-    assert (nexus_root / "data" / "palace").is_dir()
-    assert (nexus_root / "data" / "hook_state").is_dir()
     assert (fake_home / ".claude" / "settings.json").exists()
     assert (fake_home / ".codex" / "hooks.json").exists()
 
