@@ -165,31 +165,73 @@ def init(
 
 
 def _run_backfill(wing: str, marker: Path) -> bool:
-    """One-time mine of past Claude + Codex transcripts into this wing."""
+    """One-time mine of past Claude transcripts that map to this wing.
+
+    Earlier versions mined the entire `~/.claude/projects/` tree into a
+    single wing, which dumped every project's history into whatever wing
+    happened to be initialized first. Now we only mine the Claude project
+    subdir whose name maps to this wing, keeping wings cleanly per-project.
+
+    Codex sessions are not date-ish per-project, so we skip them here and
+    let mempalace's auto-mine hooks pick up new content during sessions.
+    """
+    from nexus.cli import _resolve_mempalace_bin
+
     home = Path(os.path.expanduser("~"))
-    targets = [
-        home / ".claude" / "projects",
-        home / ".codex" / "sessions",
-    ]
-    ok = True
-    for target in targets:
-        if not target.exists():
-            continue
-        try:
-            subprocess.run(
-                ["mempalace", "mine", str(target), "--mode", "convos", "--wing", wing],
-                check=True,
-                timeout=600,
-            )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            log.warning("mempalace mine failed for %s: %s", target, exc)
-            ok = False
-        except FileNotFoundError:
-            log.warning("mempalace binary not found on PATH; skipping backfill of %s", target)
-            ok = False
-        except OSError as exc:
-            log.warning("OS error mining %s: %s", target, exc)
-            ok = False
-    if ok:
+    claude_projects = home / ".claude" / "projects"
+    if not claude_projects.is_dir():
         marker.write_text("done\n", encoding="utf-8")
-    return ok
+        return True
+
+    matching_subdir = _find_claude_project_dir(claude_projects, wing)
+    if matching_subdir is None:
+        # No Claude project history for this wing yet. Mark the wing
+        # backfilled so we don't retry; ongoing sessions populate via the
+        # mempalace auto-mine hooks.
+        marker.write_text("done\n", encoding="utf-8")
+        return True
+
+    try:
+        subprocess.run(
+            [
+                _resolve_mempalace_bin(),
+                "mine", str(matching_subdir),
+                "--mode", "convos",
+                "--wing", wing,
+            ],
+            check=True,
+            timeout=600,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        log.warning("mempalace mine failed for %s: %s", matching_subdir, exc)
+        return False
+    except FileNotFoundError:
+        log.warning("mempalace binary not found; skipping backfill")
+        return False
+    except OSError as exc:
+        log.warning("OS error mining %s: %s", matching_subdir, exc)
+        return False
+
+    marker.write_text("done\n", encoding="utf-8")
+    return True
+
+
+def _find_claude_project_dir(projects_root: Path, wing: str) -> Path | None:
+    """Return the Claude project subdir whose last dash-token matches ``wing``.
+
+    Claude Code names project dirs by encoding the source path with ``-``
+    separators, e.g. ``~/.claude/projects/-home-user-Projects-myapp/``.
+    The last token is the project basename, which is what nexus uses as
+    its wing name. None when no such subdir exists.
+    """
+    if not projects_root.is_dir():
+        return None
+    target = wing.lower()
+    for entry in projects_root.iterdir():
+        if not entry.is_dir() or not entry.name.startswith("-"):
+            continue
+        encoded = entry.name[1:]
+        last_token = encoded.rsplit("-", 1)[-1].lower().replace(" ", "_").replace("-", "_")
+        if last_token == target:
+            return entry
+    return None
