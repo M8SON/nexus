@@ -1,8 +1,6 @@
 # Nexus
 
-Local-first shared assistant framework for Claude and Codex — a nexus point for AI agents working across the repos in your workspace directory.
-
-Nexus combines per-repo session recall, local-doc discovery, and shared agent policies into one repo, and hosts an active-memory layer (via MemPalace) with per-repo wing scoping.
+Local-first shared memory and policy layer for Claude Code and Codex CLI. Nexus gives both agents a common active-memory store (via MemPalace), per-repo wing scoping, and shared behavioral policies — so context, decisions, and conventions carry across sessions and across agents.
 
 ## Why
 
@@ -13,9 +11,9 @@ Working with Claude Code and Codex CLI across multiple repos creates two pain po
 
 Nexus fixes both:
 
-- **Session activation.** Every Claude Code session started inside the configured workspace gets a `Project docs:` block (working memory + adapter policies) and a `Prior session context:` block (MemPalace `wake-up` for the active repo's wing) injected automatically. No manual recall query needed.
-- **Shared policies, shared memory.** Both agents read the same `core.md` (Karpathy-derived behavioral baseline) and `continuity.md` (when to recall, when to save). Both write to the same MemPalace, scoped per repo via *wings* — work done inside `<workspace>/foo/` writes to a wing derived from that path (e.g. `_home_user_workspace_foo`), work inside `<workspace>/bar/` writes to its own wing. Wing names match what mempalace's auto-mining produces, so its save hooks and nexus's recall converge on one name without forking either tool. Memory crosses agents but stays scoped to the project it belongs to.
-- **Best-effort, never blocks.** Hook failures (mempalace not installed, palace empty, network hiccup) inject empty context and let the prompt through. The agent harness is never bricked by a memory miss.
+- **Session activation.** Every Claude Code session inside the workspace gets a `Project docs:` block (working memory + adapter policies) and a `Prior session context:` block (MemPalace `wake-up` for the active wing) injected automatically. No manual recall query needed.
+- **Shared policies, shared memory.** Both agents read the same `core.md` (Karpathy-derived behavioral baseline) and `continuity.md` (when to recall, when to save), and write to the same MemPalace. Memory is scoped per repo via *wings*: work in `<workspace>/foo/` is isolated from `<workspace>/bar/`, but crosses freely between Claude and Codex.
+- **Best-effort, never blocks.** Hook failures (mempalace missing, palace empty, network hiccup) inject empty context and let the prompt through. The agent harness is never bricked by a memory miss.
 
 ## Structure
 
@@ -42,25 +40,18 @@ nexus/
 └── tests/                          # pytest suite
 ```
 
-Palace data and hook state live at MemPalace's standard `~/.mempalace/palace`
-and `~/.mempalace/hook_state` — nexus does not redirect them. Wing names are
-path-derived (e.g. `_home_user_workspace_repo`), matching mempalace's own
-`normalize_wing_name` so its save hooks and nexus's recall agree on the same
-label without manual `--wing` flags.
+Palace data and hook state live at MemPalace's standard `~/.mempalace/palace` and `~/.mempalace/hook_state` — nexus does not redirect them. Wing names are path-derived (`/home/user/workspace/repo` → `_home_user_workspace_repo`), matching what mempalace's save hooks auto-derive — so reads and writes converge on one name without forking either tool.
 
 ## Activation
 
-The workspace root resolves from `$NEXUS_WORKSPACE_ROOT` if set, otherwise
-from this package's location (the parent of the nexus repo). Any repo placed
-underneath the workspace is treated as a managed repo. For a Claude Code
-session started inside a managed repo:
+Workspace root resolves from `$NEXUS_WORKSPACE_ROOT`, falling back to the parent of the nexus package. Any repo under it is "managed." When a Claude Code session starts inside a managed repo:
 
-1. A `CLAUDE.md` at the workspace root points at `nexus/adapters/claude/CLAUDE.md` → `core.md` + `continuity.md`. Loaded via Claude Code's CLAUDE.md ancestor walk.
-2. A SessionStart hook (registered in `~/.claude/settings.json`) runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
-3. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) runs per prompt to inject `mempalace search` hits for the active wing.
-4. Stop and PreCompact hooks (provided by MemPalace) auto-mine transcripts so memory grows over time.
+1. A workspace-level `CLAUDE.md` imports `core.md` + `continuity.md` via Claude Code's ancestor walk.
+2. SessionStart hook runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
+3. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) injects `mempalace search` hits per prompt.
+4. Stop / PreCompact hooks (mempalace-provided) auto-mine transcripts as you work.
 
-Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support is pending upstream.
+Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support pending upstream.
 
 ## CLI
 
@@ -72,9 +63,7 @@ nexus memory status
 nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all drawers
 ```
 
-`nexus memory init` is idempotent and creates `.bak` of any settings file it touches before the first edit.
-
-`memory rename-wing` is the recovery path when the workspace path changes (e.g. moving `~/linux/` → `~/projects/`): wing names are path-derived, so a directory move would otherwise orphan prior memories. The command walks mempalace's drawers and rewrites the `wing` metadata field in place; no re-mining needed.
+`memory init` is idempotent and `.bak`s any settings file before the first edit. Use `memory rename-wing` after moving your workspace (e.g. `~/linux/` → `~/projects/`) — path-derived wing names shift with the move, and this command rewrites the `wing` metadata in place so prior memories aren't orphaned.
 
 ## Install
 
@@ -101,7 +90,7 @@ git clone https://github.com/MemPalace/mempalace.git ~/mempalace
 .venv/bin/python -m nexus.cli doctor
 ```
 
-Step 4 merges Stop/PreCompact/UserPromptSubmit hooks into `~/.claude/settings.json` and `~/.codex/hooks.json` (with once-only `.bak` backups), then backfills any existing transcripts that map to managed repos. The CLI resolves via `python -m nexus.cli` from anywhere; there is no `[project.scripts]` entry, by design.
+Step 4 merges hooks into `~/.claude/settings.json` and `~/.codex/hooks.json` (once-only `.bak` backups), then backfills existing transcripts for managed repos. The CLI is invoked via `python -m nexus.cli` from anywhere — no `[project.scripts]` entry, by design.
 
 ## Configuration
 
@@ -127,7 +116,7 @@ The shared layer (policies, adapters under `nexus/`) is version-controlled — e
 
 ## Status
 
-Phase 1 (session recall, local-doc discovery, shared policies, session activation) shipped 2026-04-30.
-Phase 2 (active memory via MemPalace) shipped 2026-05-02. The earlier BM25 sqlite layer is retired.
+- Phase 1 (session recall, local-doc discovery, shared policies, session activation) shipped 2026-04-30.
+- Phase 2 (active memory via MemPalace) shipped 2026-05-02. Earlier BM25 sqlite layer retired.
 
-See `WORKING_MEMORY.md` for the current state and remaining limitations.
+See `WORKING_MEMORY.md` for current state and known limitations.
