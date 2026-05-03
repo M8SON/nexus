@@ -103,6 +103,54 @@ def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
     assert "wing: nexus" in output
 
 
+def test_context_warns_when_mempalace_missing(tmp_path, monkeypatch, capsys):
+    """FileNotFoundError from wake-up should surface a visible warning."""
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    repo = workspace / "demo"
+    repo.mkdir(parents=True)
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+
+    def fake_wake_up(wing):
+        raise FileNotFoundError("mempalace binary missing")
+    monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
+
+    code = cli_main(["context", "--repo-path", str(repo)])
+    assert code == 0
+
+    output = capsys.readouterr().out
+    assert "mempalace binary not found" in output
+    assert "recall.log" in output
+
+
+def test_resolve_mempalace_bin_prefers_sibling(tmp_path, monkeypatch):
+    """When a mempalace binary sits next to sys.executable, return that path."""
+    import sys
+    from nexus.cli import _resolve_mempalace_bin
+
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    sibling = tmp_path / "mempalace"
+    sibling.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    sibling.chmod(0o755)
+
+    monkeypatch.setattr(sys, "executable", str(fake_python))
+    assert _resolve_mempalace_bin() == str(sibling)
+
+
+def test_resolve_mempalace_bin_falls_back_to_path(tmp_path, monkeypatch):
+    """When no sibling exists, return bare 'mempalace' for PATH lookup."""
+    import sys
+    from nexus.cli import _resolve_mempalace_bin
+
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "python"))
+    assert _resolve_mempalace_bin() == "mempalace"
+
+
 def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
     from nexus.cli import main as cli_main
 

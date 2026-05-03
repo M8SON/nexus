@@ -110,9 +110,14 @@ def _handle_context(args: argparse.Namespace) -> int:
     wing = resolve_wing(repo_path)
 
     recall_hits: list[str] = []
+    memory_unavailable = False
     if wing:
         try:
             output = _mempalace_wake_up(wing=wing)
+        except FileNotFoundError as exc:
+            _log_recall_failure(repo_path, exc)
+            output = ""
+            memory_unavailable = True
         except Exception as exc:  # noqa: BLE001 — best-effort, never block a session
             _log_recall_failure(repo_path, exc)
             output = ""
@@ -121,6 +126,12 @@ def _handle_context(args: argparse.Namespace) -> int:
 
     doc_snippets = [_read_doc_snippet(p) for p in discover_context_docs(repo_path)]
     summary = build_context_summary(recall_hits=recall_hits, doc_snippets=doc_snippets)
+    if memory_unavailable:
+        warning = (
+            "# nexus: mempalace binary not found — prior-session recall is "
+            "disabled. See ~/.cache/nexus/recall.log."
+        )
+        summary = f"{warning}\n\n{summary}" if summary else warning
     print(summary or "No local context found.")
     return 0
 
@@ -136,15 +147,32 @@ def _log_recall_failure(repo_path: Path, exc: BaseException) -> None:
         pass
 
 
+def _resolve_mempalace_bin() -> str:
+    """Locate the mempalace binary.
+
+    Prefer the binary co-located with sys.executable: if `nexus` is importable
+    in this interpreter then `mempalace` is installed in the same venv, and
+    Claude Code may strip PATH so that bare `mempalace` lookups fail.
+    """
+    venv_bin = Path(sys.executable).parent / "mempalace"
+    if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
+        return str(venv_bin)
+    return "mempalace"
+
+
 def _mempalace_wake_up(wing: str) -> str:
-    """Run `mempalace wake-up --wing <wing>` with a 10s timeout. Empty on failure."""
+    """Run `mempalace wake-up --wing <wing>` with a 10s timeout. Empty on failure.
+
+    Raises FileNotFoundError when the mempalace binary cannot be located, so the
+    caller can distinguish "memory unavailable" from "memory returned nothing".
+    """
     import subprocess
     try:
         proc = subprocess.run(
-            ["mempalace", "wake-up", "--wing", wing],
+            [_resolve_mempalace_bin(), "wake-up", "--wing", wing],
             capture_output=True, text=True, timeout=10,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired:
         return ""
     if proc.returncode != 0:
         return ""

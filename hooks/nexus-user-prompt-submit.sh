@@ -17,7 +17,28 @@ LOG_DIR="$HOME/.cache/nexus"
 mkdir -p "$LOG_DIR" 2>/dev/null || true
 LOG="$LOG_DIR/user-prompt-hook.log"
 
-HITS="$(timeout 5 mempalace search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
+# Resolve the mempalace binary. Claude Code may launch hooks with a stripped
+# PATH that omits the nexus venv's bin/, so falling back to the venv adjacent
+# to this script is the reliable path. Resolution order:
+#   1. $MEMPALACE_BIN  (explicit override)
+#   2. <script>/../.venv/bin/mempalace  (sibling venv of this hook script)
+#   3. command -v mempalace  (last-resort PATH lookup)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MEMPALACE_BIN_RESOLVED="${MEMPALACE_BIN:-}"
+if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
+    if [ -x "$SCRIPT_DIR/../.venv/bin/mempalace" ]; then
+        MEMPALACE_BIN_RESOLVED="$SCRIPT_DIR/../.venv/bin/mempalace"
+    else
+        MEMPALACE_BIN_RESOLVED="$(command -v mempalace 2>/dev/null || true)"
+    fi
+fi
+if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] mempalace binary not found (set MEMPALACE_BIN to override)" >> "$LOG"
+    printf '%s' "$PAYLOAD"
+    exit 0
+fi
+
+HITS="$(timeout 5 "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
 if [ -z "$HITS" ]; then
     printf '%s' "$PAYLOAD"
     exit 0
