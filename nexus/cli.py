@@ -11,6 +11,18 @@ from nexus.context import build_context_summary
 from nexus.doc_recall import discover_context_docs
 
 
+def _default_nexus_root() -> Path:
+    """Resolve the path to this nexus repo for CLI default values.
+
+    Order: `NEXUS_ROOT` env var, else infer from this file's location
+    (`<repo>/nexus/cli.py`, so `parents[1]` is the repo root).
+    """
+    env = os.environ.get("NEXUS_ROOT")
+    if env:
+        return Path(env).expanduser().resolve()
+    return Path(__file__).resolve().parents[1]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nexus")
     subparsers = parser.add_subparsers(dest="command")
@@ -47,14 +59,17 @@ def build_parser() -> argparse.ArgumentParser:
     memory = subparsers.add_parser("memory", help="MemPalace orchestration")
     memory_sub = memory.add_subparsers(dest="memory_command")
 
+    default_nexus_root = _default_nexus_root()
+
     mem_init = memory_sub.add_parser("init", help="Wire MemPalace into both agents")
     mem_init.add_argument("--repo", type=Path, default=None,
                           help="Repo to initialize the wing for (default: cwd)")
     mem_init.add_argument("--mempalace-repo", type=Path, required=True,
                           help="Path to a local MemPalace clone (for hook scripts)")
     mem_init.add_argument("--nexus-root", type=Path,
-                          default=Path("/home/daedalus/linux/nexus"),
-                          help="Root of the nexus repo (where data/ lives)")
+                          default=default_nexus_root,
+                          help="Root of the nexus repo (where data/ lives). "
+                               "Defaults to $NEXUS_ROOT or auto-detection.")
     mem_init.add_argument("--user-prompt-hook", type=Path, required=True,
                           help="Path to the nexus UserPromptSubmit hook script")
     mem_init.add_argument("--skip-backfill", action="store_true")
@@ -63,7 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     mem_status = memory_sub.add_parser("status", help="Report memory wiring state")
     mem_status.add_argument("--repo", type=Path, default=None)
     mem_status.add_argument("--nexus-root", type=Path,
-                            default=Path("/home/daedalus/linux/nexus"))
+                            default=default_nexus_root)
     mem_status.set_defaults(handler=_handle_memory_status)
 
     return parser
@@ -98,7 +113,8 @@ def _handle_context(args: argparse.Namespace) -> int:
     if wing:
         try:
             output = _mempalace_wake_up(wing=wing)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — best-effort, never block a session
+            _log_recall_failure(repo_path, exc)
             output = ""
         if output.strip():
             recall_hits = [output.strip()]
@@ -107,6 +123,17 @@ def _handle_context(args: argparse.Namespace) -> int:
     summary = build_context_summary(recall_hits=recall_hits, doc_snippets=doc_snippets)
     print(summary or "No local context found.")
     return 0
+
+
+def _log_recall_failure(repo_path: Path, exc: BaseException) -> None:
+    """Append a one-line note to ~/.cache/nexus/recall.log; never raise."""
+    try:
+        log_dir = Path(os.path.expanduser("~")) / ".cache" / "nexus"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "recall.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{repo_path}: {type(exc).__name__}: {exc}\n")
+    except OSError:
+        pass
 
 
 def _mempalace_wake_up(wing: str) -> str:

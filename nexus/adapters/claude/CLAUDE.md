@@ -1,6 +1,6 @@
 # Claude Adapter
 
-Use nexus shared policies, continuity rules, and recall workflow for repos under `/home/daedalus/linux`.
+Use nexus shared policies, continuity rules, and recall workflow for repos under the configured workspace (`$NEXUS_WORKSPACE_ROOT`, defaulting to the directory that contains the nexus repo).
 
 The behavioral baseline is the Karpathy-derived core policy: think before coding, simplicity first, surgical changes, goal-driven execution. Read it in full — it overrides default Claude behavior where they conflict.
 

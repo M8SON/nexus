@@ -7,6 +7,8 @@ from nexus.memory.wings import resolve_wing
 
 
 def status_report(*, repo: Path, nexus_root: Path) -> dict:
+    """Diagnostic snapshot. `nexus_root` is used only to locate the
+    backfill marker — palace data lives at mempalace's default path."""
     repo = Path(repo).resolve()
     nexus_root = Path(nexus_root)
     home = Path(os.path.expanduser("~"))

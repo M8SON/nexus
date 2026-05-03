@@ -25,7 +25,6 @@ nexus/
 │   ├── adapters/{claude,codex}/   # Thin adapter pointers to shared policies
 │   ├── memory/                    # Active-memory plumbing (Phase 2)
 │   │   ├── wings.py               # cwd → wing name resolution
-│   │   ├── env.py                 # MemPalace env-var assembly
 │   │   ├── install.py             # Idempotent installer for both agents
 │   │   └── status.py              # Read-only diagnostic
 │   ├── policies/
@@ -38,13 +37,20 @@ nexus/
 ├── hooks/
 │   └── nexus-user-prompt-submit.sh  # Best-effort wake-up injection per prompt
 ├── docs/superpowers/{specs,plans}/  # Design docs and TDD-style plans
-├── data/                          # Palace + hook state (gitignored)
-└── tests/                         # pytest suite
+├── data/backfill_markers/          # Per-wing one-shot mining markers (gitignored)
+└── tests/                          # pytest suite
 ```
+
+Palace data and hook state live at MemPalace's standard `~/.mempalace/palace`
+and `~/.mempalace/hook_state` — nexus does not redirect them. Wing scoping
+(`--wing <repo>`) provides logical isolation between repos.
 
 ## Activation
 
-Configure the workspace root once (default in `nexus/config.py`); any repo placed underneath it is treated as a managed repo. For a Claude Code session started inside a managed repo:
+The workspace root resolves from `$NEXUS_WORKSPACE_ROOT` if set, otherwise
+from this package's location (the parent of the nexus repo). Any repo placed
+underneath the workspace is treated as a managed repo. For a Claude Code
+session started inside a managed repo:
 
 1. A `CLAUDE.md` at the workspace root points at `nexus/adapters/claude/CLAUDE.md` → `core.md` + `continuity.md`. Loaded via Claude Code's CLAUDE.md ancestor walk.
 2. A SessionStart hook (registered in `~/.claude/settings.json`) runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.

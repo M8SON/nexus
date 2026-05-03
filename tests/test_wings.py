@@ -6,23 +6,36 @@ import pytest
 from nexus.memory.wings import resolve_wing
 
 
-@pytest.mark.parametrize("cwd, expected", [
-    ("/home/daedalus/linux/nexus", "nexus"),
-    ("/home/daedalus/linux/nexus/nexus/memory", "nexus"),
-    ("/home/daedalus/linux/miniclaw", "miniclaw"),
-    ("/home/daedalus/linux/miniclaw/skills/dashboard", "miniclaw"),
+@pytest.fixture
+def workspace(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+    return workspace
+
+
+@pytest.mark.parametrize("relative_cwd, expected", [
+    ("nexus", "nexus"),
+    ("nexus/nexus/memory", "nexus"),
+    ("miniclaw", "miniclaw"),
+    ("miniclaw/skills/dashboard", "miniclaw"),
 ])
-def test_managed_repo_yields_repo_name(cwd, expected):
-    assert resolve_wing(Path(cwd)) == expected
+def test_managed_repo_yields_repo_name(workspace, relative_cwd, expected):
+    cwd = workspace / relative_cwd
+    cwd.mkdir(parents=True)
+    assert resolve_wing(cwd) == expected
 
 
-def test_workspace_root_yields_workspace_wing():
-    assert resolve_wing(Path("/home/daedalus/linux")) == "workspace"
+def test_workspace_root_yields_workspace_wing(workspace):
+    assert resolve_wing(workspace) == "workspace"
 
 
-def test_outside_workspace_yields_none():
-    assert resolve_wing(Path("/tmp")) is None
-    assert resolve_wing(Path("/home/daedalus")) is None
+def test_outside_workspace_yields_none(workspace, tmp_path):
+    assert resolve_wing(tmp_path / "elsewhere") is None
+    assert resolve_wing(tmp_path) is None
 
 
 def test_repo_name_with_dashes_is_normalized(tmp_path, monkeypatch):
