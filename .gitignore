@@ -6,3 +6,9 @@ dist/
 build/
 *.egg-info/
 data/
+
+# Per-user mempalace identity should never be committed — it can contain
+# names, contact info, and machine-specific paths.
+identity.txt
+*.identity
+.mempalace/

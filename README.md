@@ -80,6 +80,47 @@ python -m venv .venv
 
 The CLI resolves via `python -m nexus.cli` from anywhere; no `[project.scripts]` entry, by design (keeps the package self-contained).
 
+## Configuration
+
+Two layers ship together but live in different places:
+
+**Shared (in this repo, version-controlled):**
+- `nexus/policies/core.md` — Karpathy-derived behavioral baseline.
+- `nexus/policies/continuity.md` — recall and save triggers.
+- `nexus/adapters/{claude,codex}/` — thin pointers from each agent to those policies.
+
+These are the "shared brain" — every user gets the same behavioral contract.
+
+**Per-user (NOT in this repo, configure locally):**
+
+1. **Workspace root** — where your managed repos live. Set `$NEXUS_WORKSPACE_ROOT` in your shell profile, or rely on the default (the parent of the nexus repo).
+
+2. **MemPalace install** — clone MemPalace and run the nexus installer once:
+   ```bash
+   git clone https://github.com/MemPalace/mempalace.git ~/path/to/mempalace
+   .venv/bin/pip install mempalace
+   .venv/bin/python -m nexus.cli memory init \
+     --mempalace-repo ~/path/to/mempalace \
+     --user-prompt-hook /path/to/nexus/hooks/nexus-user-prompt-submit.sh
+   ```
+   The installer merges Stop/PreCompact/UserPromptSubmit hooks into `~/.claude/settings.json` and `~/.codex/hooks.json` (with once-only `.bak` backups), then optionally backfills your existing transcripts.
+
+3. **Identity (recommended)** — write a short personal-context blurb to `~/.mempalace/identity.txt`. MemPalace surfaces this as the L0 layer of every wake-up, so the agent always knows who you are and what you're working on. Keep it short, path-free, and **never commit it** — the repo's `.gitignore` already blocks `identity.txt` and `.mempalace/` defensively, but the canonical location is your home directory, not the repo. Example:
+   ```
+   Jane Doe. Builds project X (a Y) and project Z (a W). Primary
+   language Python; prefers terse progress updates and surgical changes.
+   ```
+
+4. **Workspace `CLAUDE.md`** — at the root of your workspace, create a `CLAUDE.md` that imports the nexus policies. Claude Code's CLAUDE.md ancestor walk will pick it up. Example:
+   ```markdown
+   # Nexus-managed workspace
+
+   @nexus/nexus/policies/core.md
+   @nexus/nexus/policies/continuity.md
+   ```
+
+After steps 1–4, run `nexus doctor` to confirm everything is wired.
+
 ## Status
 
 Phase 1 (session recall, local-doc discovery, shared policies, session activation) shipped 2026-04-30.
