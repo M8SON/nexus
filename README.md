@@ -79,45 +79,43 @@ nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all
 ## Install
 
 ```bash
-cd /path/to/nexus
+# 1. Clone nexus into your workspace
+cd ~/your-workspace
+git clone https://github.com/M8SON/nexus.git
+cd nexus
+
+# 2. Set up the venv
 python -m venv .venv
 .venv/bin/pip install -e .
+
+# 3. Clone and install mempalace (provides the active-memory layer)
+git clone https://github.com/MemPalace/mempalace.git ~/mempalace
+.venv/bin/pip install mempalace
+
+# 4. Wire hooks into Claude Code + Codex
+.venv/bin/python -m nexus.cli memory init \
+  --mempalace-repo ~/mempalace \
+  --user-prompt-hook "$(pwd)/hooks/nexus-user-prompt-submit.sh"
+
+# 5. Verify the wiring
+.venv/bin/python -m nexus.cli doctor
 ```
 
-The CLI resolves via `python -m nexus.cli` from anywhere; no `[project.scripts]` entry, by design (keeps the package self-contained).
+Step 4 merges Stop/PreCompact/UserPromptSubmit hooks into `~/.claude/settings.json` and `~/.codex/hooks.json` (with once-only `.bak` backups), then backfills any existing transcripts that map to managed repos. The CLI resolves via `python -m nexus.cli` from anywhere; there is no `[project.scripts]` entry, by design.
 
 ## Configuration
 
-Two layers ship together but live in different places:
-
-**Shared (in this repo, version-controlled):**
-- `nexus/policies/core.md` — Karpathy-derived behavioral baseline.
-- `nexus/policies/continuity.md` — recall and save triggers.
-- `nexus/adapters/{claude,codex}/` — thin pointers from each agent to those policies.
-
-These are the "shared brain" — every user gets the same behavioral contract.
-
-**Per-user (NOT in this repo, configure locally):**
+The shared layer (policies, adapters under `nexus/`) is version-controlled — every user gets the same behavioral contract. The per-user knobs:
 
 1. **Workspace root** — where your managed repos live. Set `$NEXUS_WORKSPACE_ROOT` in your shell profile, or rely on the default (the parent of the nexus repo).
 
-2. **MemPalace install** — clone MemPalace and run the nexus installer once:
-   ```bash
-   git clone https://github.com/MemPalace/mempalace.git ~/path/to/mempalace
-   .venv/bin/pip install mempalace
-   .venv/bin/python -m nexus.cli memory init \
-     --mempalace-repo ~/path/to/mempalace \
-     --user-prompt-hook /path/to/nexus/hooks/nexus-user-prompt-submit.sh
-   ```
-   The installer merges Stop/PreCompact/UserPromptSubmit hooks into `~/.claude/settings.json` and `~/.codex/hooks.json` (with once-only `.bak` backups), then optionally backfills your existing transcripts.
-
-3. **Identity (recommended)** — write a short personal-context blurb to `~/.mempalace/identity.txt`. MemPalace surfaces this as the L0 layer of every wake-up, so the agent always knows who you are and what you're working on. Keep it short, path-free, and **never commit it** — the repo's `.gitignore` already blocks `identity.txt` and `.mempalace/` defensively, but the canonical location is your home directory, not the repo. Example:
+2. **Identity (recommended)** — write a short personal-context blurb to `~/.mempalace/identity.txt`. MemPalace surfaces this as the L0 layer of every wake-up. Keep it short, path-free, and **never commit it** — the repo's `.gitignore` already blocks `identity.txt` and `.mempalace/` defensively. Example:
    ```
    Jane Doe. Builds project X (a Y) and project Z (a W). Primary
    language Python; prefers terse progress updates and surgical changes.
    ```
 
-4. **Workspace `CLAUDE.md`** — at the root of your workspace, create a `CLAUDE.md` that imports the nexus policies. Claude Code's CLAUDE.md ancestor walk will pick it up. Example:
+3. **Workspace `CLAUDE.md`** — at the root of your workspace, create a `CLAUDE.md` that imports the nexus policies. Claude Code's CLAUDE.md ancestor walk picks it up:
    ```markdown
    # Nexus-managed workspace
 
@@ -125,13 +123,7 @@ These are the "shared brain" — every user gets the same behavioral contract.
    @nexus/nexus/policies/continuity.md
    ```
 
-   The `@nexus/nexus/policies/...` paths assume the nexus repo lives at
-   `<workspace>/nexus/`. If you cloned it elsewhere, adjust the import paths
-   to be workspace-relative (Claude Code resolves `@`-imports relative to the
-   `CLAUDE.md` file's directory). For example, with nexus at
-   `<workspace>/tools/nexus/`, use `@tools/nexus/nexus/policies/core.md`.
-
-After steps 1–4, run `nexus doctor` to confirm everything is wired.
+   The `@nexus/nexus/policies/...` paths assume nexus lives at `<workspace>/nexus/`. If you cloned it elsewhere, adjust the import paths (Claude Code resolves `@`-imports relative to the `CLAUDE.md` file's directory) — e.g. with nexus at `<workspace>/tools/nexus/`, use `@tools/nexus/nexus/policies/core.md`.
 
 ## Status
 
