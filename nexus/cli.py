@@ -81,6 +81,17 @@ def build_parser() -> argparse.ArgumentParser:
                             default=default_nexus_root)
     mem_status.set_defaults(handler=_handle_memory_status)
 
+    mem_rename = memory_sub.add_parser(
+        "rename-wing",
+        help="Rewrite the wing metadata field on every drawer "
+             "in --from to --to (use after moving your workspace path).",
+    )
+    mem_rename.add_argument("--from", dest="from_wing", required=True,
+                            help="Source wing name")
+    mem_rename.add_argument("--to", dest="to_wing", required=True,
+                            help="Destination wing name")
+    mem_rename.set_defaults(handler=_handle_memory_rename)
+
     return parser
 
 
@@ -251,6 +262,22 @@ def _handle_memory_init(args: argparse.Namespace) -> int:
     print(f"claude settings: {result['claude_settings']}")
     print(f"codex hooks:     {result['codex_hooks']}")
     print(f"backfill done:   {result['backfill_done']}")
+    return 0
+
+
+def _handle_memory_rename(args: argparse.Namespace) -> int:
+    from nexus.memory.migration import rename_wing
+
+    try:
+        result = rename_wing(args.from_wing, args.to_wing)
+    except (ValueError, RuntimeError) as exc:
+        print(f"rename-wing failed: {exc}", file=sys.stderr)
+        return 1
+
+    if result.get("noop"):
+        print(f"noop: --from and --to are both {args.from_wing!r}")
+    else:
+        print(f"moved {result['moved']} drawers: {result['from']} -> {result['to']}")
     return 0
 
 

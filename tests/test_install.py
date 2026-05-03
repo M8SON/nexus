@@ -195,12 +195,13 @@ def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
         skip_backfill=True,
     )
 
-    assert result["wing"] == "nexus"
+    from nexus.memory.wings import path_to_wing
+    assert result["wing"] == path_to_wing(repo)
     assert (fake_home / ".claude" / "settings.json").exists()
     assert (fake_home / ".codex" / "hooks.json").exists()
 
 
-def test_find_claude_project_dir_matches_last_token(tmp_path):
+def test_find_claude_project_dir_matches_full_normalized_name(tmp_path):
     from nexus.memory.install import _find_claude_project_dir
 
     projects = tmp_path / "projects"
@@ -209,38 +210,23 @@ def test_find_claude_project_dir_matches_last_token(tmp_path):
     (projects / "-home-user-linux-miniclaw").mkdir()
     (projects / "-home-user-other").mkdir()
 
-    found = _find_claude_project_dir(projects, "nexus")
+    # Wings are now full path-derived (matching what mempalace auto-derives).
+    found = _find_claude_project_dir(projects, "_home_user_linux_nexus")
     assert found == projects / "-home-user-linux-nexus"
 
-    found = _find_claude_project_dir(projects, "miniclaw")
+    found = _find_claude_project_dir(projects, "_home_user_linux_miniclaw")
     assert found == projects / "-home-user-linux-miniclaw"
 
     assert _find_claude_project_dir(projects, "ghost") is None
 
 
-def test_find_claude_project_dir_normalizes_case(tmp_path):
+def test_find_claude_project_dir_is_case_insensitive(tmp_path):
     from nexus.memory.install import _find_claude_project_dir
 
     projects = tmp_path / "projects"
     projects.mkdir()
-    # Last token is treated case-insensitively to match nexus's wing naming.
-    (projects / "-home-user-NEXUS").mkdir()
-    assert _find_claude_project_dir(projects, "nexus") == projects / "-home-user-NEXUS"
-
-
-def test_find_claude_project_dir_does_not_match_dashed_names(tmp_path):
-    """Projects whose basename contains a dash cannot be matched by last-token
-    alone — Claude Code's path encoding loses the boundary. This is a known
-    limitation; the test pins it so we notice if we ever fix it."""
-    from nexus.memory.install import _find_claude_project_dir
-
-    projects = tmp_path / "projects"
-    projects.mkdir()
-    (projects / "-home-user-MY-Project").mkdir()
-
-    # Last token is "Project", not "MY-Project" — so wing "my_project" misses.
-    assert _find_claude_project_dir(projects, "my_project") is None
-    assert _find_claude_project_dir(projects, "project") == projects / "-home-user-MY-Project"
+    (projects / "-Home-USER-NEXUS").mkdir()
+    assert _find_claude_project_dir(projects, "_home_user_nexus") == projects / "-Home-USER-NEXUS"
 
 
 def test_run_backfill_skips_when_no_matching_subdir(tmp_path, monkeypatch):
@@ -258,7 +244,7 @@ def test_run_backfill_skips_when_no_matching_subdir(tmp_path, monkeypatch):
     monkeypatch.setattr("nexus.memory.install.subprocess.run", fake_run)
 
     marker = tmp_path / "marker.done"
-    assert _run_backfill(wing="nexus", marker=marker) is True
+    assert _run_backfill(wing="_home_user_linux_nexus", marker=marker) is True
     assert marker.exists()
     assert called == []
 
@@ -281,13 +267,13 @@ def test_run_backfill_mines_only_matching_subdir(tmp_path, monkeypatch):
     monkeypatch.setattr("nexus.memory.install.subprocess.run", fake_run)
 
     marker = tmp_path / "marker.done"
-    assert _run_backfill(wing="nexus", marker=marker) is True
+    assert _run_backfill(wing="_home_user_linux_nexus", marker=marker) is True
 
     assert len(captured_cmds) == 1
     cmd = captured_cmds[0]
     assert str(nexus_dir) in cmd
     assert str(miniclaw_dir) not in cmd
-    assert "--wing" in cmd and "nexus" in cmd
+    assert "--wing" in cmd and "_home_user_linux_nexus" in cmd
 
 
 def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):

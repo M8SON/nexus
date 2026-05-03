@@ -18,7 +18,8 @@ def test_status_reports_palace_existence(tmp_path, monkeypatch):
     )
 
     report = status_report(repo=repo, nexus_root=nexus_root)
-    assert report["wing"] == "nexus"
+    from nexus.memory.wings import path_to_wing
+    assert report["wing"] == path_to_wing(repo)
     assert report["palace_exists"] is True
 
 

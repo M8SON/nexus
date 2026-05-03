@@ -217,21 +217,19 @@ def _run_backfill(wing: str, marker: Path) -> bool:
 
 
 def _find_claude_project_dir(projects_root: Path, wing: str) -> Path | None:
-    """Return the Claude project subdir whose last dash-token matches ``wing``.
+    """Return the Claude project subdir whose normalized name matches ``wing``.
 
     Claude Code names project dirs by encoding the source path with ``-``
-    separators, e.g. ``~/.claude/projects/-home-user-Projects-myapp/``.
-    The last token is the project basename, which is what nexus uses as
-    its wing name. None when no such subdir exists.
+    separators, e.g. ``-home-user-linux-nexus``. After mempalace's
+    `normalize_wing_name` (lower + dash/space → underscore), that becomes
+    ``_home_user_linux_nexus`` — which is the wing name nexus also uses.
     """
     if not projects_root.is_dir():
         return None
-    target = wing.lower()
     for entry in projects_root.iterdir():
-        if not entry.is_dir() or not entry.name.startswith("-"):
+        if not entry.is_dir():
             continue
-        encoded = entry.name[1:]
-        last_token = encoded.rsplit("-", 1)[-1].lower().replace(" ", "_").replace("-", "_")
-        if last_token == target:
+        normalized = entry.name.lower().replace(" ", "_").replace("-", "_")
+        if normalized == wing:
             return entry
     return None

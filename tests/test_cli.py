@@ -44,7 +44,8 @@ def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
     assert "Wake offload was completed" in output
     assert "Project docs:" in output
     assert "Wake offload overview" in output
-    assert captured_calls == ["demo"]
+    from nexus.memory.wings import path_to_wing
+    assert captured_calls == [path_to_wing(repo)]
 
 
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
@@ -100,7 +101,8 @@ def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
     ])
     assert code == 0
     output = capsys.readouterr().out
-    assert "wing: nexus" in output
+    from nexus.memory.wings import path_to_wing
+    assert f"wing: {path_to_wing(repo)}" in output
 
 
 def test_context_warns_when_mempalace_missing(tmp_path, monkeypatch, capsys):
