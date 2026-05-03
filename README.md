@@ -14,7 +14,7 @@ Working with Claude Code and Codex CLI across multiple repos creates two pain po
 Nexus fixes both:
 
 - **Session activation.** Every Claude Code session started inside the configured workspace gets a `Project docs:` block (working memory + adapter policies) and a `Prior session context:` block (MemPalace `wake-up` for the active repo's wing) injected automatically. No manual recall query needed.
-- **Shared policies, shared memory.** Both agents read the same `core.md` (Karpathy-derived behavioral baseline) and `continuity.md` (when to recall, when to save). Both write to the same MemPalace, scoped per repo via *wings* — work done inside `<workspace>/foo/` writes to wing `foo`, work inside `<workspace>/bar/` writes to wing `bar`. Memory crosses agents but stays scoped to the project it belongs to.
+- **Shared policies, shared memory.** Both agents read the same `core.md` (Karpathy-derived behavioral baseline) and `continuity.md` (when to recall, when to save). Both write to the same MemPalace, scoped per repo via *wings* — work done inside `<workspace>/foo/` writes to a wing derived from that path (e.g. `_home_user_workspace_foo`), work inside `<workspace>/bar/` writes to its own wing. Wing names match what mempalace's auto-mining produces, so its save hooks and nexus's recall converge on one name without forking either tool. Memory crosses agents but stays scoped to the project it belongs to.
 - **Best-effort, never blocks.** Hook failures (mempalace not installed, palace empty, network hiccup) inject empty context and let the prompt through. The agent harness is never bricked by a memory miss.
 
 ## Structure
@@ -26,11 +26,12 @@ nexus/
 │   ├── memory/                    # Active-memory plumbing (Phase 2)
 │   │   ├── wings.py               # cwd → wing name resolution
 │   │   ├── install.py             # Idempotent installer for both agents
+│   │   ├── migration.py           # Wing rename helper (workspace path moves)
 │   │   └── status.py              # Read-only diagnostic
 │   ├── policies/
 │   │   ├── core.md                # Karpathy-derived behavioral baseline
 │   │   └── continuity.md          # Recall/save triggers
-│   ├── cli.py                     # context | doctor | memory {init,status}
+│   ├── cli.py                     # context | doctor | memory {init,status,rename-wing}
 │   ├── config.py                  # Workspace config + managed-repo predicate
 │   ├── context.py                 # Context summary assembly
 │   └── doc_recall.py              # Local-doc discovery (working memory, README, etc.)
@@ -42,8 +43,10 @@ nexus/
 ```
 
 Palace data and hook state live at MemPalace's standard `~/.mempalace/palace`
-and `~/.mempalace/hook_state` — nexus does not redirect them. Wing scoping
-(`--wing <repo>`) provides logical isolation between repos.
+and `~/.mempalace/hook_state` — nexus does not redirect them. Wing names are
+path-derived (e.g. `_home_user_workspace_repo`), matching mempalace's own
+`normalize_wing_name` so its save hooks and nexus's recall agree on the same
+label without manual `--wing` flags.
 
 ## Activation
 
@@ -62,13 +65,16 @@ Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support is pend
 ## CLI
 
 ```
-nexus context --repo-path <path>      # Assemble session context (wraps `mempalace wake-up`)
-nexus doctor  --repo-path <path>      # Workspace + memory wiring health check
+nexus context --repo-path <path>           # Assemble session context (wraps `mempalace wake-up`)
+nexus doctor  --repo-path <path>           # Workspace + memory wiring health check
 nexus memory init --mempalace-repo <path> --user-prompt-hook <path>
 nexus memory status
+nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all drawers
 ```
 
 `nexus memory init` is idempotent and creates `.bak` of any settings file it touches before the first edit.
+
+`memory rename-wing` is the recovery path when the workspace path changes (e.g. moving `~/linux/` → `~/projects/`): wing names are path-derived, so a directory move would otherwise orphan prior memories. The command walks mempalace's drawers and rewrites the `wing` metadata field in place; no re-mining needed.
 
 ## Install
 
