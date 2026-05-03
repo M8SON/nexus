@@ -119,6 +119,12 @@ These are the "shared brain" — every user gets the same behavioral contract.
    @nexus/nexus/policies/continuity.md
    ```
 
+   The `@nexus/nexus/policies/...` paths assume the nexus repo lives at
+   `<workspace>/nexus/`. If you cloned it elsewhere, adjust the import paths
+   to be workspace-relative (Claude Code resolves `@`-imports relative to the
+   `CLAUDE.md` file's directory). For example, with nexus at
+   `<workspace>/tools/nexus/`, use `@tools/nexus/nexus/policies/core.md`.
+
 After steps 1–4, run `nexus doctor` to confirm everything is wired.
 
 ## Status
