@@ -4,11 +4,80 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from nexus.memory.wings import resolve_wing
 
 log = logging.getLogger(__name__)
+
+
+def _resolve_mempalace_mcp_bin() -> str:
+    """Locate the mempalace-mcp server binary.
+
+    Mirrors `nexus.cli._resolve_mempalace_bin`: prefer the binary co-located
+    with the current interpreter (the venv that has nexus installed also has
+    mempalace-mcp), fall back to bare PATH lookup.
+    """
+    venv_bin = Path(sys.executable).parent / "mempalace-mcp"
+    if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
+        return str(venv_bin)
+    return "mempalace-mcp"
+
+
+def register_claude_mcp_server(
+    *,
+    mempalace_mcp_bin: str | None = None,
+    name: str = "mempalace",
+    scope: str = "user",
+) -> dict:
+    """Register the MemPalace MCP server with Claude Code.
+
+    Without this, agents only get MemPalace via Stop/PreCompact/UserPromptSubmit
+    hooks (auto-save + wake-up context), and have no in-session way to call
+    `mempalace_search` or related tools — the proactive-recall side of the
+    `continuity.md` policy is dead-on-arrival.
+
+    Idempotent: removes any prior registration with this name before adding,
+    so a re-run with a different binary path picks up the new one cleanly.
+    User scope is the default because MemPalace currently does NOT honor
+    `MEMPALACE_DEFAULT_WING`, so per-repo `.mcp.json` files (the original
+    spec design) wouldn't auto-scope wings anyway — agents pass `wing=`
+    per call regardless. Revisit if upstream MemPalace adds env-var
+    wing defaulting.
+
+    Falls back gracefully if the `claude` CLI isn't on PATH — the hooks-only
+    flow still produces a working setup; only proactive in-session recall
+    is degraded.
+    """
+    if not shutil.which("claude"):
+        return {"registered": False, "reason": "claude CLI not on PATH"}
+
+    bin_path = mempalace_mcp_bin or _resolve_mempalace_mcp_bin()
+
+    # Idempotent: ignore exit code from remove (it's expected to fail
+    # when no prior registration exists).
+    subprocess.run(
+        ["claude", "mcp", "remove", name, "--scope", scope],
+        capture_output=True,
+        timeout=15,
+    )
+    try:
+        subprocess.run(
+            ["claude", "mcp", "add", "--scope", scope, name, bin_path],
+            capture_output=True,
+            timeout=15,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace")[:200]
+        return {"registered": False, "reason": f"claude mcp add failed: {stderr}"}
+    except subprocess.TimeoutExpired:
+        return {"registered": False, "reason": "claude mcp add timed out"}
+    except FileNotFoundError:
+        return {"registered": False, "reason": "claude CLI not on PATH"}
+
+    return {"registered": True, "reason": None, "bin_path": bin_path, "name": name, "scope": scope}
 
 
 def _safe_write_json(path: Path, data: dict) -> None:
@@ -150,6 +219,19 @@ def init(
         precompact_hook=str(precompact),
     )
 
+    # Hooks alone wire automatic save / wake-up context, but the proactive
+    # in-session recall side of continuity.md needs the MCP tool surface
+    # (mempalace_search, mempalace_status, etc.) — register the MCP server
+    # with Claude Code at user scope. Failures here don't break the broader
+    # install; the hooks-only flow still works.
+    mcp_registration = register_claude_mcp_server()
+    if not mcp_registration.get("registered"):
+        log.warning(
+            "MemPalace MCP server not registered with Claude Code: %s. "
+            "Proactive in-session recall will be unavailable; auto-save still works.",
+            mcp_registration.get("reason"),
+        )
+
     backfill_done = False
     marker = nexus_root / "data" / "backfill_markers" / f"{wing}.done"
     if not skip_backfill and not marker.exists():
@@ -160,6 +242,8 @@ def init(
         "wing": wing,
         "claude_settings": str(claude_settings),
         "codex_hooks": str(codex_hooks),
+        "claude_mcp_registered": mcp_registration.get("registered", False),
+        "claude_mcp_reason": mcp_registration.get("reason"),
         "backfill_done": backfill_done,
     }
 

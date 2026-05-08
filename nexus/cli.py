@@ -261,6 +261,11 @@ def _handle_memory_init(args: argparse.Namespace) -> int:
     print(f"wing: {result['wing']}")
     print(f"claude settings: {result['claude_settings']}")
     print(f"codex hooks:     {result['codex_hooks']}")
+    if result.get("claude_mcp_registered"):
+        print("claude mcp:      registered (mempalace, scope=user)")
+    else:
+        reason = result.get("claude_mcp_reason") or "unknown"
+        print(f"claude mcp:      NOT registered ({reason}); in-session recall unavailable")
     print(f"backfill done:   {result['backfill_done']}")
     return 0
 

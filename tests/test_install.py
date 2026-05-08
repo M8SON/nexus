@@ -164,6 +164,67 @@ def test_locate_raises_when_not_found(tmp_path):
         locate_mempalace_hooks(repo_root=tmp_path)
 
 
+def test_register_claude_mcp_server_calls_remove_then_add(monkeypatch):
+    """Idempotent registration: remove first, then add."""
+    from unittest.mock import MagicMock
+    from nexus.memory import install
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = b""
+        return result
+
+    monkeypatch.setattr(install.shutil, "which", lambda _: "/usr/bin/claude")
+    monkeypatch.setattr(install.subprocess, "run", fake_run)
+
+    result = install.register_claude_mcp_server(mempalace_mcp_bin="/path/to/mempalace-mcp")
+
+    assert result["registered"] is True
+    assert calls[0][:3] == ["claude", "mcp", "remove"]
+    assert calls[1][:3] == ["claude", "mcp", "add"]
+    assert "/path/to/mempalace-mcp" in calls[1]
+    assert "--scope" in calls[1] and "user" in calls[1]
+
+
+def test_register_claude_mcp_server_no_cli_falls_back_gracefully(monkeypatch):
+    """Without the claude CLI on PATH, registration reports the reason and continues."""
+    from nexus.memory import install
+    monkeypatch.setattr(install.shutil, "which", lambda _: None)
+
+    result = install.register_claude_mcp_server()
+
+    assert result["registered"] is False
+    assert "claude CLI not on PATH" in result["reason"]
+
+
+def test_register_claude_mcp_server_propagates_add_failure(monkeypatch):
+    """When `claude mcp add` exits non-zero, the reason is captured (not raised)."""
+    import subprocess as sp
+    from nexus.memory import install
+
+    monkeypatch.setattr(install.shutil, "which", lambda _: "/usr/bin/claude")
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["claude", "mcp", "remove"]:
+            class _R:
+                returncode = 0
+                stderr = b""
+            return _R()
+        # add fails
+        raise sp.CalledProcessError(returncode=1, cmd=cmd, stderr=b"server already exists")
+
+    monkeypatch.setattr(install.subprocess, "run", fake_run)
+
+    result = install.register_claude_mcp_server(mempalace_mcp_bin="/path/to/mempalace-mcp")
+
+    assert result["registered"] is False
+    assert "server already exists" in result["reason"]
+
+
 from nexus.memory.install import init
 
 
@@ -187,6 +248,11 @@ def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
     user_prompt_hook = tmp_path / "nexus-user-prompt-submit.sh"
     user_prompt_hook.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
 
+    # Skip touching the real claude CLI: fake "not on PATH" so the MCP
+    # registration step exercises the graceful-fallback branch.
+    from nexus.memory import install as install_module
+    monkeypatch.setattr(install_module.shutil, "which", lambda _: None)
+
     result = init(
         repo=repo,
         mempalace_repo=mempalace,
@@ -199,6 +265,10 @@ def test_init_creates_data_dirs_and_merges_settings(tmp_path, monkeypatch):
     assert result["wing"] == path_to_wing(repo)
     assert (fake_home / ".claude" / "settings.json").exists()
     assert (fake_home / ".codex" / "hooks.json").exists()
+    # MCP registration ran but couldn't find the CLI in this test env;
+    # the reason should be captured and init() should not have raised.
+    assert result["claude_mcp_registered"] is False
+    assert "claude CLI" in (result["claude_mcp_reason"] or "")
 
 
 def test_find_claude_project_dir_matches_full_normalized_name(tmp_path):
