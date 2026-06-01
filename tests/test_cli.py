@@ -277,3 +277,28 @@ def test_load_subcommand_bootstrap_note_on_missing_project_policy(tmp_path, monk
     out = capsys.readouterr().out
     assert "projects/book.md" in out
     assert "using core.md" in out
+
+
+def test_list_projects_subcommand(tmp_path, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    (workspace / "miniclaw").mkdir(parents=True)
+
+    nexus_root = tmp_path / "nexus_repo"
+    (nexus_root / "nexus" / "policies" / "projects").mkdir(parents=True)
+    (nexus_root / "nexus" / "policies" / "core.md").write_text("core")
+    (nexus_root / "nexus" / "policies" / "projects" / "book.md").write_text("writing")
+
+    code = cli_main([
+        "list-projects",
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "book" in out
+    assert "miniclaw" in out
+    assert "projects/book.md" in out
+    assert "core (default)" in out

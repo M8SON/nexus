@@ -112,6 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     load_p.set_defaults(handler=_handle_load)
 
+    lp = subparsers.add_parser("list-projects", help="List workspace projects")
+    lp.add_argument("--workspace-root", type=Path, default=None)
+    lp.add_argument("--nexus-root", type=Path, default=default_nexus_root)
+    lp.set_defaults(handler=_handle_list_projects)
+
     return parser
 
 
@@ -204,6 +209,32 @@ def _handle_load(args: argparse.Namespace) -> int:
         print(result.recall.rstrip())
     else:
         print("(no prior recall for this topic)")
+    return 0
+
+
+def _handle_list_projects(args: argparse.Namespace) -> int:
+    from nexus.memory.wings import path_to_wing
+    from nexus.projects import list_projects
+
+    workspace_root = (
+        Path(args.workspace_root)
+        if args.workspace_root is not None
+        else NexusConfig.default().workspace_root
+    )
+
+    projects = list_projects(workspace_root, nexus_root=Path(args.nexus_root))
+    if not projects:
+        print("(no projects found)")
+        return 0
+
+    rows = [("project", "wing", "policy")]
+    for p in projects:
+        policy_label = f"projects/{p.name}.md" if p.has_policy else "core (default)"
+        rows.append((p.name, path_to_wing(p.path), policy_label))
+
+    widths = [max(len(r[i]) for r in rows) for i in range(3)]
+    for r in rows:
+        print(f"{r[0]:<{widths[0]}}  {r[1]:<{widths[1]}}  {r[2]:<{widths[2]}}")
     return 0
 
 
