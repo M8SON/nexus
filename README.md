@@ -11,8 +11,8 @@ Working with Claude Code and Codex CLI across multiple repos creates two pain po
 
 Nexus fixes both:
 
-- **Session activation.** Every Claude Code session inside the workspace gets a `Project docs:` block (working memory + adapter policies) and a `Prior session context:` block (MemPalace `wake-up` for the active wing) injected automatically. No manual recall query needed.
-- **Shared policies, shared memory.** Both agents read the same `core.md` (Karpathy-derived behavioral baseline) and `continuity.md` (when to recall, when to save), and write to the same MemPalace. Memory is scoped per repo via *wings*: work in `<workspace>/foo/` is isolated from `<workspace>/bar/`, but crosses freely between Claude and Codex.
+- **Session activation.** Every Claude Code session inside the workspace gets a lean baseline injected: identity blurb (from `~/.mempalace/identity.txt`), the list of workspace projects, the load instruction, and local doc snippets. Targeted recall fires after the user states a topic, via `nexus load <project> --topic "..."` — not as a generic wake-up dump.
+- **Shared policies, shared memory.** Both agents read the same `continuity.md` (when to recall, when to save). Each project picks its domain policy: `core.md` (Karpathy coding baseline) by default, or a per-project override at `policies/projects/<project>.md` for projects whose philosophy differs (e.g. writing). Memory is scoped per repo via *wings*: work in `<workspace>/foo/` is isolated from `<workspace>/bar/`, but crosses freely between Claude and Codex.
 - **Best-effort, never blocks.** Hook failures (mempalace missing, palace empty, network hiccup) inject empty context and let the prompt through. The agent harness is never bricked by a memory miss.
 
 ## Structure
@@ -27,12 +27,15 @@ nexus/
 │   │   ├── migration.py           # Wing rename helper (workspace path moves)
 │   │   └── status.py              # Read-only diagnostic
 │   ├── policies/
-│   │   ├── core.md                # Karpathy-derived behavioral baseline
-│   │   └── continuity.md          # Recall/save triggers
-│   ├── cli.py                     # context | doctor | memory {init,status,rename-wing}
+│   │   ├── core.md                # Karpathy-derived coding baseline
+│   │   ├── continuity.md          # Recall/save triggers
+│   │   └── projects/<name>.md     # Optional per-project policy override
+│   ├── cli.py                     # context | doctor | memory {…} | load | list-projects
 │   ├── config.py                  # Workspace config + managed-repo predicate
-│   ├── context.py                 # Context summary assembly
-│   └── doc_recall.py              # Local-doc discovery (working memory, README, etc.)
+│   ├── context.py                 # Lean baseline assembly
+│   ├── doc_recall.py              # Local-doc discovery (working memory, README, etc.)
+│   ├── projects.py                # Workspace project listing
+│   └── load.py                    # Per-project policy + targeted recall
 ├── hooks/
 │   └── nexus-user-prompt-submit.sh  # Best-effort wake-up injection per prompt
 ├── docs/superpowers/{specs,plans}/  # Design docs and TDD-style plans
@@ -47,16 +50,19 @@ Palace data and hook state live at MemPalace's standard `~/.mempalace/palace` an
 Workspace root resolves from `$NEXUS_WORKSPACE_ROOT`, falling back to the parent of the nexus package. Any repo under it is "managed." When a Claude Code session starts inside a managed repo:
 
 1. A workspace-level `CLAUDE.md` imports `core.md` + `continuity.md` via Claude Code's ancestor walk.
-2. SessionStart hook runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout is injected as session context.
-3. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) injects `mempalace search` hits per prompt.
-4. Stop / PreCompact hooks (mempalace-provided) auto-mine transcripts as you work.
+2. SessionStart hook runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout (identity + project list + load instruction + doc snippets) is injected as session context.
+3. Once the user states what they want to work on, the agent runs `nexus load <project> --topic "<their message>"` to pull project-scoped policy + targeted MemPalace recall.
+4. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) injects `mempalace search` hits per prompt.
+5. Stop / PreCompact hooks (mempalace-provided) auto-mine transcripts as you work.
 
 Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support pending upstream.
 
 ## CLI
 
 ```
-nexus context --repo-path <path>           # Assemble session context (wraps `mempalace wake-up`)
+nexus context --repo-path <path>           # Lean SessionStart baseline (identity + projects + load instruction + docs)
+nexus list-projects                        # Table of workspace projects with wing + policy source
+nexus load <project> --topic "<text>"      # Per-project policy + targeted recall scoped to the wing
 nexus doctor  --repo-path <path>           # Workspace + memory wiring health check
 nexus memory init --mempalace-repo <path> --user-prompt-hook <path>
 nexus memory status
@@ -64,6 +70,10 @@ nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all
 ```
 
 `memory init` is idempotent and `.bak`s any settings file before the first edit. Use `memory rename-wing` after moving your workspace (e.g. `~/linux/` → `~/projects/`) — path-derived wing names shift with the move, and this command rewrites the `wing` metadata in place so prior memories aren't orphaned.
+
+### Per-project policies
+
+`nexus load <project>` reads its domain policy from `nexus/policies/projects/<project>.md` if present, otherwise falls back to `core.md` with a one-line bootstrap note pointing at the missing file. This lets a coding project use the Karpathy baseline while, say, a writing project ships its own philosophy (show-don't-tell, draft-over-polish, etc.). `continuity.md` always applies regardless of project.
 
 ## Install
 
