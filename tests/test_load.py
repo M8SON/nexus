@@ -148,11 +148,12 @@ def test_load_project_unknown_project_raises(tmp_path):
     assert "book" in str(exc.value)
 
 
-def test_load_project_handles_missing_mempalace(tmp_path):
+def test_load_project_handles_missing_mempalace(tmp_path, monkeypatch):
     workspace = _make_workspace(tmp_path)
     nexus_root = _make_nexus_root(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
 
-    with patch("nexus.load.mempalace_search", side_effect=FileNotFoundError):
+    with patch("nexus.load.mempalace_search", side_effect=FileNotFoundError("boom")):
         result = load_project(
             project="book",
             topic="x",
@@ -163,6 +164,12 @@ def test_load_project_handles_missing_mempalace(tmp_path):
     assert result.recall == ""
     assert result.memory_unavailable is True
     assert result.policy.source == "core.md"
+
+    log = tmp_path / ".cache" / "nexus" / "recall.log"
+    assert log.is_file()
+    contents = log.read_text(encoding="utf-8")
+    assert "book" in contents
+    assert "FileNotFoundError" in contents
 
 
 def test_load_project_empty_recall_is_ok(tmp_path):

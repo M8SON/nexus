@@ -57,6 +57,17 @@ def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
     )
 
 
+def _log_recall_failure(project: str, exc: BaseException) -> None:
+    """Append a one-line note to ~/.cache/nexus/recall.log; never raise."""
+    try:
+        log_dir = Path(os.path.expanduser("~")) / ".cache" / "nexus"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        with (log_dir / "recall.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"{project}: {type(exc).__name__}: {exc}\n")
+    except OSError:
+        pass
+
+
 def _resolve_mempalace_bin() -> str:
     """Locate the mempalace binary.
 
@@ -128,9 +139,10 @@ def load_project(
     memory_unavailable = False
     try:
         recall = mempalace_search(topic, wing=wing, limit=limit)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         recall = ""
         memory_unavailable = True
+        _log_recall_failure(project, exc)
 
     return LoadResult(
         project=project,

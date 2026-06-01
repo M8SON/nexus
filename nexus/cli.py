@@ -27,17 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     context = subparsers.add_parser(
-        "context", help="Assemble local docs and prior session context"
+        "context", help="Emit lean SessionStart baseline"
     )
-    context.add_argument("query", nargs="?", default="")
-    _add_project_dir_arg(context)
     context.add_argument(
         "--repo-path",
         type=Path,
         default=Path.cwd(),
         help="Repository path used for document discovery",
     )
-    context.add_argument("--limit", type=int, default=3)
     context.set_defaults(handler=_handle_context)
 
     doctor = subparsers.add_parser("doctor", help="Check workspace and memory wiring")
@@ -267,15 +264,6 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     print(f"workspace root: {workspace_root}")
     print(f"repo path: {repo_path}")
     return 0 if all(ok for _, ok in fatal_checks) else 1
-
-
-def _add_project_dir_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--project-dir",
-        type=Path,
-        default=None,
-        help="Directory containing transcript JSONL files",
-    )
 
 
 def _read_doc_snippet(path: Path) -> str:
