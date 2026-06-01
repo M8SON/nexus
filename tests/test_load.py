@@ -20,7 +20,6 @@ def test_returns_project_policy_when_file_exists(tmp_path):
 
     result = resolve_policy("book", nexus_root)
 
-    assert isinstance(result, PolicyResolution)
     assert result.source == "projects/book.md"
     assert "Show, don't tell." in result.text
     assert result.bootstrap_note is None
@@ -41,5 +40,13 @@ def test_raises_when_core_missing(tmp_path):
     nexus_root = tmp_path / "nexus_repo"
     (nexus_root / "nexus" / "policies" / "projects").mkdir(parents=True)
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError, match="core.md"):
         resolve_policy("book", nexus_root)
+
+
+def test_rejects_invalid_project_names(tmp_path):
+    nexus_root = _make_nexus_root(tmp_path)
+
+    for bad in ["../secret", "a/b", ".hidden", ""]:
+        with pytest.raises(ValueError, match="invalid project name"):
+            resolve_policy(bad, nexus_root)

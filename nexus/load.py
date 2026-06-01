@@ -10,8 +10,8 @@ class PolicyResolution:
     """Result of resolving a project's policy file."""
 
     text: str
-    source: str  # "projects/<name>.md" or "core.md"
-    bootstrap_note: str | None  # one-line note when falling back to core.md
+    source: str
+    bootstrap_note: str | None
 
 
 def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
@@ -21,6 +21,9 @@ def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
     to `<nexus_root>/nexus/policies/core.md` with a bootstrap note. Raises
     FileNotFoundError if core.md is also missing (broken repo state).
     """
+    if not project or "/" in project or project.startswith("."):
+        raise ValueError(f"invalid project name: {project!r}")
+
     policies = Path(nexus_root) / "nexus" / "policies"
     project_md = policies / "projects" / f"{project}.md"
     core_md = policies / "core.md"
