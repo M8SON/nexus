@@ -31,6 +31,7 @@ def test_includes_policy_presence_flag(tmp_path):
     by_name = {p.name: p for p in projects}
     assert by_name["book"].has_policy is True
     assert by_name["miniclaw"].has_policy is False
+    assert by_name["book"].path == workspace / "book"
 
 
 def test_returns_empty_when_workspace_missing(tmp_path):
@@ -46,3 +47,15 @@ def test_skips_hidden_and_underscore_dirs(tmp_path):
 
     projects = list_projects(workspace)
     assert [p.name for p in projects] == ["book"]
+
+
+def test_returns_false_has_policy_when_projects_dir_missing(tmp_path):
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    nexus_root = tmp_path / "nexus_repo"
+    # Note: no policies/projects/ subdir created.
+
+    projects = list_projects(workspace, nexus_root=nexus_root)
+
+    assert len(projects) == 1
+    assert projects[0].has_policy is False
