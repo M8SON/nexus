@@ -7,6 +7,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from nexus.memory.wings import path_to_wing
+from nexus.projects import list_projects
+
 
 @dataclass(frozen=True)
 class PolicyResolution:
@@ -86,3 +89,53 @@ def mempalace_search(query: str, *, wing: str, limit: int) -> str:
     if proc.returncode != 0:
         return ""
     return proc.stdout
+
+
+@dataclass(frozen=True)
+class LoadResult:
+    project: str
+    wing: str
+    policy: PolicyResolution
+    recall: str
+    memory_unavailable: bool
+
+
+def load_project(
+    *,
+    project: str,
+    topic: str,
+    workspace_root: Path,
+    nexus_root: Path,
+    limit: int = 5,
+) -> LoadResult:
+    """Validate project, resolve policy, run targeted recall.
+
+    Raises ValueError when `project` doesn't exist under `workspace_root`.
+    Never raises for missing/timed-out mempalace — surfaces that via
+    `memory_unavailable`.
+    """
+    project_dir = Path(workspace_root) / project
+    if not project_dir.is_dir():
+        available = ", ".join(p.name for p in list_projects(workspace_root)) or "(none)"
+        raise ValueError(
+            f"project '{project}' not found under {workspace_root}. "
+            f"Available: {available}"
+        )
+
+    wing = path_to_wing(project_dir)
+    policy = resolve_policy(project, nexus_root)
+
+    memory_unavailable = False
+    try:
+        recall = mempalace_search(topic, wing=wing, limit=limit)
+    except FileNotFoundError:
+        recall = ""
+        memory_unavailable = True
+
+    return LoadResult(
+        project=project,
+        wing=wing,
+        policy=policy,
+        recall=recall,
+        memory_unavailable=memory_unavailable,
+    )
