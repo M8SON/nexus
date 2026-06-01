@@ -177,3 +177,103 @@ def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):
     assert "palace path exists: yes" in output
     assert "mempalace on path:" in output
     assert "claude hooks installed:" in output
+
+
+def test_load_subcommand_prints_policy_and_recall(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+
+    nexus_root = tmp_path / "nexus_repo"
+    policies = nexus_root / "nexus" / "policies"
+    (policies / "projects").mkdir(parents=True)
+    (policies / "core.md").write_text("# core policy")
+    (policies / "projects" / "book.md").write_text("# Writing policy\nShow, don't tell.")
+
+    monkeypatch.setattr(
+        "nexus.memory.wings.NexusConfig.default",
+        classmethod(lambda cls: cls(workspace_root=workspace)),
+    )
+    monkeypatch.setattr("nexus.load.mempalace_search", lambda q, **kw: f"hits for: {q}")
+
+    code = cli_main([
+        "load", "book",
+        "--topic", "chapter 3",
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "# Project policy: book" in out
+    assert "Show, don't tell." in out
+    assert '# Recall hits for "chapter 3"' in out
+    assert "hits for: chapter 3" in out
+
+
+def test_load_subcommand_unknown_project_exits_1(tmp_path, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    workspace.mkdir(parents=True)
+    nexus_root = tmp_path / "nexus_repo"
+    (nexus_root / "nexus" / "policies" / "projects").mkdir(parents=True)
+    (nexus_root / "nexus" / "policies" / "core.md").write_text("core")
+
+    code = cli_main([
+        "load", "ghost",
+        "--topic", "x",
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "ghost" in err
+
+
+def test_load_subcommand_empty_recall_prints_placeholder(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    nexus_root = tmp_path / "nexus_repo"
+    (nexus_root / "nexus" / "policies" / "projects").mkdir(parents=True)
+    (nexus_root / "nexus" / "policies" / "core.md").write_text("core")
+
+    monkeypatch.setattr("nexus.load.mempalace_search", lambda q, **kw: "")
+
+    code = cli_main([
+        "load", "book",
+        "--topic", "x",
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "(no prior recall for this topic)" in out
+
+
+def test_load_subcommand_bootstrap_note_on_missing_project_policy(tmp_path, monkeypatch, capsys):
+    from nexus.cli import main as cli_main
+
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    nexus_root = tmp_path / "nexus_repo"
+    (nexus_root / "nexus" / "policies" / "projects").mkdir(parents=True)
+    (nexus_root / "nexus" / "policies" / "core.md").write_text("# core")
+
+    monkeypatch.setattr("nexus.load.mempalace_search", lambda q, **kw: "")
+
+    code = cli_main([
+        "load", "book",
+        "--topic", "x",
+        "--workspace-root", str(workspace),
+        "--nexus-root", str(nexus_root),
+    ])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "projects/book.md" in out
+    assert "using core.md" in out

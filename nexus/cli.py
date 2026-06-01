@@ -92,6 +92,26 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Destination wing name")
     mem_rename.set_defaults(handler=_handle_memory_rename)
 
+    load_p = subparsers.add_parser(
+        "load",
+        help="Load per-project policy + targeted recall by topic",
+    )
+    load_p.add_argument("project", help="Project name (folder under workspace)")
+    load_p.add_argument("--topic", required=True, help="Topic query for recall")
+    load_p.add_argument("--limit", type=int, default=5)
+    load_p.add_argument(
+        "--workspace-root",
+        type=Path,
+        default=None,
+        help="Workspace root (default: NEXUS_WORKSPACE_ROOT env or auto)",
+    )
+    load_p.add_argument(
+        "--nexus-root",
+        type=Path,
+        default=default_nexus_root,
+    )
+    load_p.set_defaults(handler=_handle_load)
+
     return parser
 
 
@@ -144,6 +164,46 @@ def _handle_context(args: argparse.Namespace) -> int:
         )
         summary = f"{warning}\n\n{summary}" if summary else warning
     print(summary or "No local context found.")
+    return 0
+
+
+def _handle_load(args: argparse.Namespace) -> int:
+    from nexus.load import load_project
+
+    workspace_root = (
+        Path(args.workspace_root)
+        if args.workspace_root is not None
+        else NexusConfig.default().workspace_root
+    )
+
+    try:
+        result = load_project(
+            project=args.project,
+            topic=args.topic,
+            workspace_root=workspace_root,
+            nexus_root=Path(args.nexus_root),
+            limit=args.limit,
+        )
+    except ValueError as exc:
+        print(f"nexus load: {exc}", file=sys.stderr)
+        return 1
+    except FileNotFoundError as exc:
+        print(f"nexus load: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"# Project policy: {result.project} (source: {result.policy.source})")
+    if result.policy.bootstrap_note:
+        print(result.policy.bootstrap_note)
+    print()
+    print(result.policy.text.rstrip())
+    print()
+    print(f'# Recall hits for "{args.topic}" (wing: {result.wing})')
+    if result.memory_unavailable:
+        print("(memory unavailable — mempalace binary not found)")
+    elif result.recall.strip():
+        print(result.recall.rstrip())
+    else:
+        print("(no prior recall for this topic)")
     return 0
 
 
