@@ -50,3 +50,45 @@ def test_rejects_invalid_project_names(tmp_path):
     for bad in ["../secret", "a/b", ".hidden", ""]:
         with pytest.raises(ValueError, match="invalid project name"):
             resolve_policy(bad, nexus_root)
+
+
+from unittest.mock import patch
+
+from nexus.load import mempalace_search
+
+
+def test_search_returns_stdout_on_success():
+    fake_completed = type("R", (), {"returncode": 0, "stdout": "hit one\nhit two\n", "stderr": ""})()
+    with patch("nexus.load.subprocess.run", return_value=fake_completed) as run:
+        out = mempalace_search("chapter 3", wing="_x_book", limit=5)
+
+    assert out == "hit one\nhit two\n"
+    cmd = run.call_args.args[0]
+    assert cmd[1:] == ["search", "chapter 3", "--wing", "_x_book", "--results", "5"]
+
+
+def test_search_returns_empty_on_nonzero_exit():
+    fake = type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
+    with patch("nexus.load.subprocess.run", return_value=fake):
+        out = mempalace_search("q", wing="_x", limit=3)
+    assert out == ""
+
+
+def test_search_returns_empty_on_timeout():
+    import subprocess
+    with patch(
+        "nexus.load.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="mempalace", timeout=10),
+    ):
+        out = mempalace_search("q", wing="_x", limit=3)
+    assert out == ""
+
+
+def test_search_raises_when_binary_missing(monkeypatch):
+    monkeypatch.setattr("nexus.load._resolve_mempalace_bin", lambda: "/no/such/mempalace")
+    with patch(
+        "nexus.load.subprocess.run",
+        side_effect=FileNotFoundError("not there"),
+    ):
+        with pytest.raises(FileNotFoundError):
+            mempalace_search("q", wing="_x", limit=3)

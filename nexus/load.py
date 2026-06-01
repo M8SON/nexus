@@ -1,6 +1,9 @@
 """Project loading: policy resolution + targeted recall."""
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,3 +52,37 @@ def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
         source="core.md",
         bootstrap_note=note,
     )
+
+
+def _resolve_mempalace_bin() -> str:
+    """Locate the mempalace binary.
+
+    Prefers the binary co-located with sys.executable (Claude Code may strip
+    PATH so bare lookups fail). Falls back to bare `mempalace`.
+    """
+    venv_bin = Path(sys.executable).parent / "mempalace"
+    if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
+        return str(venv_bin)
+    return "mempalace"
+
+
+def mempalace_search(query: str, *, wing: str, limit: int) -> str:
+    """Run `mempalace search` and return stdout. Empty on failure
+    except missing binary (raises FileNotFoundError so caller can
+    distinguish 'unavailable' from 'no hits')."""
+    cmd = [
+        _resolve_mempalace_bin(),
+        "search",
+        query,
+        "--wing",
+        wing,
+        "--results",
+        str(limit),
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return ""
+    if proc.returncode != 0:
+        return ""
+    return proc.stdout
