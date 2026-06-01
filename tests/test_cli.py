@@ -18,34 +18,30 @@ def test_context_subcommand_exists(capsys):
     assert "usage:" in captured.out
 
 
-def test_context_assembles_docs_and_recall_hits(tmp_path, monkeypatch, capsys):
+def test_context_emits_lean_baseline(tmp_path, monkeypatch, capsys):
     from nexus.cli import main as cli_main
 
     workspace = tmp_path / "linux"
     repo = workspace / "demo"
     repo.mkdir(parents=True)
-    (repo / "README.md").write_text("Wake offload overview", encoding="utf-8")
+    (repo / "README.md").write_text("Demo project overview", encoding="utf-8")
+    (workspace / "other").mkdir()
+
     monkeypatch.setattr(
         "nexus.memory.wings.NexusConfig.default",
         classmethod(lambda cls: cls(workspace_root=workspace)),
     )
+    monkeypatch.setattr("nexus.cli._read_identity_blurb", lambda: None)
 
-    captured_calls = []
-    def fake_wake_up(wing):
-        captured_calls.append(wing)
-        return "Wake offload was completed"
-    monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
-
-    code = cli_main(["context", "wake", "--repo-path", str(repo)])
+    code = cli_main(["context", "--repo-path", str(repo)])
     assert code == 0
 
-    output = capsys.readouterr().out
-    assert "Prior session context:" in output
-    assert "Wake offload was completed" in output
-    assert "Project docs:" in output
-    assert "Wake offload overview" in output
-    from nexus.memory.wings import path_to_wing
-    assert captured_calls == [path_to_wing(repo)]
+    out = capsys.readouterr().out
+    assert "Workspace projects available: demo, other" in out
+    assert "nexus load <project> --topic" in out
+    assert "Project docs:" in out
+    assert "Demo project overview" in out
+    assert "Prior session context:" not in out
 
 
 def test_doctor_fails_when_repo_is_outside_workspace(tmp_path, capsys):
@@ -104,53 +100,6 @@ def test_memory_init_invokes_install(tmp_path, monkeypatch, capsys):
     from nexus.memory.wings import path_to_wing
     assert f"wing: {path_to_wing(repo)}" in output
 
-
-def test_context_warns_when_mempalace_missing(tmp_path, monkeypatch, capsys):
-    """FileNotFoundError from wake-up should surface a visible warning."""
-    from nexus.cli import main as cli_main
-
-    workspace = tmp_path / "linux"
-    repo = workspace / "demo"
-    repo.mkdir(parents=True)
-    monkeypatch.setattr(
-        "nexus.memory.wings.NexusConfig.default",
-        classmethod(lambda cls: cls(workspace_root=workspace)),
-    )
-
-    def fake_wake_up(wing):
-        raise FileNotFoundError("mempalace binary missing")
-    monkeypatch.setattr("nexus.cli._mempalace_wake_up", fake_wake_up)
-
-    code = cli_main(["context", "--repo-path", str(repo)])
-    assert code == 0
-
-    output = capsys.readouterr().out
-    assert "mempalace binary not found" in output
-    assert "recall.log" in output
-
-
-def test_resolve_mempalace_bin_prefers_sibling(tmp_path, monkeypatch):
-    """When a mempalace binary sits next to sys.executable, return that path."""
-    import sys
-    from nexus.cli import _resolve_mempalace_bin
-
-    fake_python = tmp_path / "python"
-    fake_python.write_text("", encoding="utf-8")
-    sibling = tmp_path / "mempalace"
-    sibling.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    sibling.chmod(0o755)
-
-    monkeypatch.setattr(sys, "executable", str(fake_python))
-    assert _resolve_mempalace_bin() == str(sibling)
-
-
-def test_resolve_mempalace_bin_falls_back_to_path(tmp_path, monkeypatch):
-    """When no sibling exists, return bare 'mempalace' for PATH lookup."""
-    import sys
-    from nexus.cli import _resolve_mempalace_bin
-
-    monkeypatch.setattr(sys, "executable", str(tmp_path / "python"))
-    assert _resolve_mempalace_bin() == "mempalace"
 
 
 def test_doctor_reports_palace_state(tmp_path, monkeypatch, capsys):

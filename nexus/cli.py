@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 from nexus.config import NexusConfig
-from nexus.context import build_context_summary
 from nexus.doc_recall import discover_context_docs
 
 
@@ -139,36 +138,37 @@ def main(argv: list[str] | None = None) -> int:
     return int(handler(args))
 
 
+def _read_identity_blurb() -> str | None:
+    """Read `~/.mempalace/identity.txt` if it exists. Empty file → None."""
+    path = Path(os.path.expanduser("~")) / ".mempalace" / "identity.txt"
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text or None
+
+
 def _handle_context(args: argparse.Namespace) -> int:
-    from nexus.memory.wings import resolve_wing
+    from nexus.context import build_lean_baseline
+    from nexus.projects import list_projects
 
     repo_path = Path(args.repo_path).resolve()
-    wing = resolve_wing(repo_path)
+    workspace_root = NexusConfig.default().workspace_root.resolve()
 
-    recall_hits: list[str] = []
-    memory_unavailable = False
-    if wing:
-        try:
-            output = _mempalace_wake_up(wing=wing)
-        except FileNotFoundError as exc:
-            _log_recall_failure(repo_path, exc)
-            output = ""
-            memory_unavailable = True
-        except Exception as exc:  # noqa: BLE001 — best-effort, never block a session
-            _log_recall_failure(repo_path, exc)
-            output = ""
-        if output.strip():
-            recall_hits = [output.strip()]
+    if workspace_root != repo_path and workspace_root not in repo_path.parents:
+        # cwd is outside the managed workspace — silent no-op.
+        return 0
 
+    projects = list_projects(workspace_root)
     doc_snippets = [_read_doc_snippet(p) for p in discover_context_docs(repo_path)]
-    summary = build_context_summary(recall_hits=recall_hits, doc_snippets=doc_snippets)
-    if memory_unavailable:
-        warning = (
-            "# nexus: mempalace binary not found — prior-session recall is "
-            "disabled. See ~/.cache/nexus/recall.log."
-        )
-        summary = f"{warning}\n\n{summary}" if summary else warning
-    print(summary or "No local context found.")
+    identity = _read_identity_blurb()
+
+    out = build_lean_baseline(
+        identity=identity,
+        project_names=[p.name for p in projects],
+        doc_snippets=doc_snippets,
+    )
+    print(out or "No local context found.")
     return 0
 
 
@@ -237,48 +237,6 @@ def _handle_list_projects(args: argparse.Namespace) -> int:
         print(f"{r[0]:<{widths[0]}}  {r[1]:<{widths[1]}}  {r[2]:<{widths[2]}}")
     return 0
 
-
-def _log_recall_failure(repo_path: Path, exc: BaseException) -> None:
-    """Append a one-line note to ~/.cache/nexus/recall.log; never raise."""
-    try:
-        log_dir = Path(os.path.expanduser("~")) / ".cache" / "nexus"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        with (log_dir / "recall.log").open("a", encoding="utf-8") as fh:
-            fh.write(f"{repo_path}: {type(exc).__name__}: {exc}\n")
-    except OSError:
-        pass
-
-
-def _resolve_mempalace_bin() -> str:
-    """Locate the mempalace binary.
-
-    Prefer the binary co-located with sys.executable: if `nexus` is importable
-    in this interpreter then `mempalace` is installed in the same venv, and
-    Claude Code may strip PATH so that bare `mempalace` lookups fail.
-    """
-    venv_bin = Path(sys.executable).parent / "mempalace"
-    if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
-        return str(venv_bin)
-    return "mempalace"
-
-
-def _mempalace_wake_up(wing: str) -> str:
-    """Run `mempalace wake-up --wing <wing>` with a 10s timeout. Empty on failure.
-
-    Raises FileNotFoundError when the mempalace binary cannot be located, so the
-    caller can distinguish "memory unavailable" from "memory returned nothing".
-    """
-    import subprocess
-    try:
-        proc = subprocess.run(
-            [_resolve_mempalace_bin(), "wake-up", "--wing", wing],
-            capture_output=True, text=True, timeout=10,
-        )
-    except subprocess.TimeoutExpired:
-        return ""
-    if proc.returncode != 0:
-        return ""
-    return proc.stdout
 
 
 def _handle_doctor(args: argparse.Namespace) -> int:

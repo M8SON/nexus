@@ -15,9 +15,8 @@ log = logging.getLogger(__name__)
 def _resolve_mempalace_mcp_bin() -> str:
     """Locate the mempalace-mcp server binary.
 
-    Mirrors `nexus.cli._resolve_mempalace_bin`: prefer the binary co-located
-    with the current interpreter (the venv that has nexus installed also has
-    mempalace-mcp), fall back to bare PATH lookup.
+    Prefer the binary co-located with the current interpreter (the venv that
+    has nexus installed also has mempalace-mcp), fall back to bare PATH lookup.
     """
     venv_bin = Path(sys.executable).parent / "mempalace-mcp"
     if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
@@ -259,7 +258,11 @@ def _run_backfill(wing: str, marker: Path) -> bool:
     Codex sessions are not date-ish per-project, so we skip them here and
     let mempalace's auto-mine hooks pick up new content during sessions.
     """
-    from nexus.cli import _resolve_mempalace_bin
+    def _resolve_mempalace_bin() -> str:
+        venv_bin = Path(sys.executable).parent / "mempalace"
+        if venv_bin.is_file() and os.access(venv_bin, os.X_OK):
+            return str(venv_bin)
+        return "mempalace"
 
     home = Path(os.path.expanduser("~"))
     claude_projects = home / ".claude" / "projects"
