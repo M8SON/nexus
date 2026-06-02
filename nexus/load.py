@@ -20,15 +20,30 @@ class PolicyResolution:
     bootstrap_note: str | None
 
 
-def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
+PROJECT_POLICY_FILENAME = "PHILOSOPHY.md"
+
+
+def resolve_policy(
+    project: str, nexus_root: Path, project_dir: Path | None = None
+) -> PolicyResolution:
     """Return the policy text for `project`.
 
-    Prefers `<nexus_root>/nexus/policies/projects/<project>.md`. Falls back
-    to `<nexus_root>/nexus/policies/core.md` with a bootstrap note. Raises
+    Lookup order: a project-local `<project_dir>/PHILOSOPHY.md` (when
+    `project_dir` is given), then `<nexus_root>/nexus/policies/projects/<project>.md`,
+    then `<nexus_root>/nexus/policies/core.md` with a bootstrap note. Raises
     FileNotFoundError if core.md is also missing (broken repo state).
     """
     if not project or "/" in project or project.startswith("."):
         raise ValueError(f"invalid project name: {project!r}")
+
+    if project_dir is not None:
+        local_md = Path(project_dir) / PROJECT_POLICY_FILENAME
+        if local_md.is_file():
+            return PolicyResolution(
+                text=local_md.read_text(encoding="utf-8"),
+                source=f"{project}/{PROJECT_POLICY_FILENAME}",
+                bootstrap_note=None,
+            )
 
     policies = Path(nexus_root) / "nexus" / "policies"
     project_md = policies / "projects" / f"{project}.md"
@@ -47,8 +62,8 @@ def resolve_policy(project: str, nexus_root: Path) -> PolicyResolution:
         )
 
     note = (
-        f"note: no project policy at projects/{project}.md — using core.md. "
-        "Create the file to customize."
+        f"note: no project policy at {project}/{PROJECT_POLICY_FILENAME} or "
+        f"projects/{project}.md — using core.md. Create the file to customize."
     )
     return PolicyResolution(
         text=core_md.read_text(encoding="utf-8"),
@@ -134,7 +149,7 @@ def load_project(
         )
 
     wing = path_to_wing(project_dir)
-    policy = resolve_policy(project, nexus_root)
+    policy = resolve_policy(project, nexus_root, project_dir=project_dir)
 
     memory_unavailable = False
     try:

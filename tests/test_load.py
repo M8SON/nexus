@@ -52,6 +52,44 @@ def test_rejects_invalid_project_names(tmp_path):
             resolve_policy(bad, nexus_root)
 
 
+def test_returns_project_local_philosophy_when_present(tmp_path):
+    nexus_root = _make_nexus_root(tmp_path)
+    project_dir = tmp_path / "linux" / "book"
+    project_dir.mkdir(parents=True)
+    (project_dir / "PHILOSOPHY.md").write_text("# Book philosophy\nFunctional prose.")
+
+    result = resolve_policy("book", nexus_root, project_dir=project_dir)
+
+    assert result.source == "book/PHILOSOPHY.md"
+    assert "Functional prose." in result.text
+    assert result.bootstrap_note is None
+
+
+def test_project_local_philosophy_beats_central(tmp_path):
+    nexus_root = _make_nexus_root(tmp_path)
+    (nexus_root / "nexus" / "policies" / "projects" / "book.md").write_text("central")
+    project_dir = tmp_path / "linux" / "book"
+    project_dir.mkdir(parents=True)
+    (project_dir / "PHILOSOPHY.md").write_text("local wins")
+
+    result = resolve_policy("book", nexus_root, project_dir=project_dir)
+
+    assert result.source == "book/PHILOSOPHY.md"
+    assert result.text == "local wins"
+
+
+def test_no_local_philosophy_falls_back_to_central(tmp_path):
+    nexus_root = _make_nexus_root(tmp_path)
+    (nexus_root / "nexus" / "policies" / "projects" / "book.md").write_text("central")
+    project_dir = tmp_path / "linux" / "book"
+    project_dir.mkdir(parents=True)
+
+    result = resolve_policy("book", nexus_root, project_dir=project_dir)
+
+    assert result.source == "projects/book.md"
+    assert result.text == "central"
+
+
 from unittest.mock import patch
 
 from nexus.load import mempalace_search
@@ -131,6 +169,23 @@ def test_load_project_returns_policy_and_recall(tmp_path):
     call_kwargs = ms.call_args.kwargs
     assert call_kwargs["wing"] == result.wing
     assert call_kwargs["limit"] == 5
+
+
+def test_load_project_prefers_local_philosophy(tmp_path):
+    workspace = _make_workspace(tmp_path)
+    (workspace / "book" / "PHILOSOPHY.md").write_text("# Book philosophy\nBeats first.")
+    nexus_root = _make_nexus_root(tmp_path)
+
+    with patch("nexus.load.mempalace_search", return_value="recall"):
+        result = load_project(
+            project="book",
+            topic="chapter 3",
+            workspace_root=workspace,
+            nexus_root=nexus_root,
+        )
+
+    assert result.policy.source == "book/PHILOSOPHY.md"
+    assert "Beats first." in result.policy.text
 
 
 def test_load_project_unknown_project_raises(tmp_path):
