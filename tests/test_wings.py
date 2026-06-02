@@ -31,7 +31,8 @@ def test_managed_repo_yields_path_derived_wing(workspace, relative_cwd, repo_nam
     assert resolve_wing(cwd) == expected
     # Sanity-check the actual format on a known shape.
     assert expected.endswith(f"_{repo_name}")
-    assert expected.startswith("_")
+    # MCP-valid slug: leading separator is stripped, so no leading underscore.
+    assert not expected.startswith("_")
 
 
 def test_workspace_root_yields_workspace_wing(workspace):
@@ -70,8 +71,9 @@ def test_symlink_resolving_back_into_workspace_is_managed(tmp_path, monkeypatch)
 
 
 def test_path_to_wing_replaces_separators_and_lowers():
-    assert path_to_wing(Path("/home/user/linux/nexus")) == "_home_user_linux_nexus"
-    assert path_to_wing(Path("/Home/USER/My-Repo")) == "_home_user_my_repo"
+    assert path_to_wing(Path("/home/user/linux/nexus")) == "home_user_linux_nexus"
+    assert path_to_wing(Path("/Home/USER/My-Repo")) == "home_user_my_repo"
     # Match mempalace's normalize_wing_name on Claude Code's path-encoded
-    # project dir basename: spaces also collapse to underscores.
-    assert path_to_wing(Path("/Users/foo bar/app")) == "_users_foo_bar_app"
+    # project dir basename: spaces also collapse to underscores, and the
+    # leading/trailing separators are stripped so the slug is MCP-valid.
+    assert path_to_wing(Path("/Users/foo bar/app")) == "users_foo_bar_app"

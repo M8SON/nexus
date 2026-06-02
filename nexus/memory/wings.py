@@ -36,11 +36,12 @@ def resolve_wing(cwd: Path, config: NexusConfig | None = None) -> str | None:
 def path_to_wing(path: Path) -> str:
     """Convert an absolute path to mempalace's auto-derived wing name.
 
-    Mempalace's `normalize_wing_name` lowercases and collapses dashes and
-    spaces to underscores, applied to the basename of Claude Code's
-    path-encoded project dir (e.g. `-home-user-linux-nexus`). The same
-    output comes from converting the logical path: `/`, `-`, and ` ` all
-    become `_`.
+    Mempalace's `normalize_wing_name` lowercases, collapses dashes and
+    spaces to underscores, and strips leading/trailing separators, applied
+    to the basename of Claude Code's path-encoded project dir (e.g.
+    `-home-user-linux-nexus`). The same output comes from converting the
+    logical path: `/`, `-`, and ` ` all become `_`, then the leading/trailing
+    `_` is stripped so the slug is MCP-valid (no leading underscore).
     """
     s = str(path).replace("/", "_").replace(" ", "_").replace("-", "_")
-    return s.lower()
+    return s.lower().strip("_")
