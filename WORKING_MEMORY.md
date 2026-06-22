@@ -1,6 +1,6 @@
 # Nexus Working Memory
 
-Updated: 2026-05-02
+Updated: 2026-06-22
 
 ## Current Status
 
@@ -38,11 +38,11 @@ Phase 2 tasks shipped (1–19): MemPalace is the recall + save engine for both C
 ## Current Limitations
 
 - Codex CLI does not currently support a UserPromptSubmit-equivalent hook, so the wake-up context injection is Claude-only. Save and PreCompact hooks fire on both agents.
-- The palace was created without HNSW cosine metadata, so `mempalace search` similarity scores are not meaningful (BM25 ranking still works). Run `mempalace repair` once to rebuild the index with the correct metric.
+- ~~The palace was created without HNSW cosine metadata, so `mempalace search` similarity scores are not meaningful.~~ Resolved: the palace was rebuilt 2026-05-03 (see `~/.mempalace/palace.pre-cleanup-20260503-132915` backup). The collection is now configured `hnsw:space=cosine` and search returns live, varying cosine scores. `repair-status` reporting "no flushed metadata yet" is expected, not a fault — `hnsw:sync_threshold=50000` vs 15,562 drawers means records are searched exactly from the brute-force buffer. Do **not** run `mempalace repair` for this; it's a needless destructive rebuild.
 
 ## Next Step
 
 Phase 2 is functionally done. Future work:
 
 1. Close the Codex prompt-injection gap when upstream supports it — port the UserPromptSubmit logic to whatever Codex provides.
-2. Run `mempalace repair` to give cosine ranking real meaning on the current palace.
+2. (Optional) MemPalace search fuses cosine + bm25 and the fusion is bm25-dominant, so strong semantic matches can rank below weaker keyword matches. If recall relevance disappoints, the lever is MemPalace's rank-fusion weighting — an upstream MemPalace concern, not a Nexus change.
