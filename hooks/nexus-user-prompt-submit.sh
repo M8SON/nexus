@@ -5,7 +5,25 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve the wing for this repo. Explicit $NEXUS_WING wins (manual runs and
+# tests); otherwise derive it from the project dir via the same resolve_wing()
+# that `nexus load` uses, so the hook scopes per repo with no per-repo env
+# setup. Dirs outside the workspace resolve to empty — no injection.
 WING="${NEXUS_WING:-}"
+if [ -z "$WING" ]; then
+    NEXUS_PY="$SCRIPT_DIR/../.venv/bin/python"
+    [ -x "$NEXUS_PY" ] || NEXUS_PY="$(command -v python3 2>/dev/null || true)"
+    if [ -n "$NEXUS_PY" ]; then
+        WING="$(PYTHONPATH="$SCRIPT_DIR/.." "$NEXUS_PY" -c '
+import sys
+from pathlib import Path
+from nexus.memory.wings import resolve_wing
+print(resolve_wing(Path(sys.argv[1])) or "")
+' "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || true)"
+    fi
+fi
 [ -n "$WING" ] || exit 0
 
 # Read the prompt from stdin (Claude Code passes it as JSON).
@@ -23,7 +41,6 @@ LOG="$LOG_DIR/user-prompt-hook.log"
 #   1. $MEMPALACE_BIN  (explicit override)
 #   2. <script>/../.venv/bin/mempalace  (sibling venv of this hook script)
 #   3. command -v mempalace  (last-resort PATH lookup)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEMPALACE_BIN_RESOLVED="${MEMPALACE_BIN:-}"
 if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
     if [ -x "$SCRIPT_DIR/../.venv/bin/mempalace" ]; then
@@ -38,7 +55,10 @@ if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
     exit 0
 fi
 
-HITS="$(timeout 5 "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
+# 15s, not 5s: a warm search runs ~3.4s, but a cold one loads the embedder
+# model and overruns 5s, silently yielding no injection on a session's first
+# prompt. Claude Code's hook budget for this entry is 30s.
+HITS="$(timeout 15 "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
 if [ -z "$HITS" ]; then
     printf '%s' "$PAYLOAD"
     exit 0
