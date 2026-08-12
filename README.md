@@ -12,7 +12,7 @@ Working with Claude Code and Codex CLI across multiple repos creates two pain po
 Nexus fixes both:
 
 - **Session activation.** Every Claude Code session inside the workspace gets a lean baseline injected: identity blurb (from `~/.mempalace/identity.txt`), the list of workspace projects, the load instruction, and local doc snippets. Targeted recall fires after the user states a topic, via `nexus load <project> --topic "..."` — not as a generic wake-up dump.
-- **Shared policies, shared memory.** Both agents read the same `continuity.md` (when to recall, when to save). Each project picks its domain policy: `core.md` (Karpathy coding baseline) by default, or a per-project override at `policies/projects/<project>.md` for projects whose philosophy differs (e.g. writing). Memory is scoped per repo via *wings*: work in `<workspace>/foo/` is isolated from `<workspace>/bar/`, but crosses freely between Claude and Codex.
+- **Shared policies, shared memory.** Both agents read the same `continuity.md` (when to recall, when to save). Each project picks its domain policy: `core.md` (Karpathy coding guidelines plus workspace-wide conventions) by default, or a per-project override at `policies/projects/<project>.md` for projects whose philosophy differs (e.g. writing). Memory is scoped per repo via *wings*: work in `<workspace>/foo/` is isolated from `<workspace>/bar/`, but crosses freely between Claude and Codex.
 - **Best-effort, never blocks.** Hook failures (mempalace missing, palace empty, network hiccup) inject empty context and let the prompt through. The agent harness is never bricked by a memory miss.
 
 ## Structure
@@ -73,7 +73,9 @@ nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all
 
 ### Per-project policies
 
-`nexus load <project>` reads its domain policy from `nexus/policies/projects/<project>.md` if present, otherwise falls back to `core.md` with a one-line bootstrap note pointing at the missing file. This lets a coding project use the Karpathy baseline while, say, a writing project ships its own philosophy (show-don't-tell, draft-over-polish, etc.). `continuity.md` always applies regardless of project.
+`nexus load <project>` reads its domain policy from `nexus/policies/projects/<project>.md` if present, otherwise falls back to `core.md` with a one-line bootstrap note pointing at the missing file. This lets a coding project use the Karpathy guidelines while, say, a writing project ships its own philosophy (show-don't-tell, draft-over-polish, etc.).
+
+Note that this resolution picks exactly one file — an override *replaces* `core.md` rather than layering on top of it. The unconditional layer comes from elsewhere: the workspace-root `CLAUDE.md` `@`-imports `core.md` and `continuity.md` directly, so both stay in context for every project regardless of what `nexus load` resolves. Sections 5-6 of `core.md` (search-before-you-build, concise-detailed responses) are domain-neutral and reach overriding projects that way.
 
 ## Install
 

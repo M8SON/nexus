@@ -4,6 +4,8 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej
 
 This is the baseline behavioral contract for any agent working in a nexus-managed repo. Combine with `continuity.md` for recall and local-doc rules.
 
+Sections 1-4 are Karpathy's. Sections 5-6 are workspace additions.
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 ## 1. Think Before Coding
@@ -63,6 +65,33 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Nani Gigantum Humeris Insidentes
+
+**Dwarfs standing on the shoulders of giants. Search before you build.**
+
+Before creating anything new - a file, a function, a doc, a script, a policy:
+- Search the repo for it. It may already exist under a name you didn't guess.
+- Check `mempalace_search` (wing-scoped) for prior attempts and why they were shaped that way.
+- If something close exists, extend it. Don't ship a parallel implementation.
+- If you're deliberately replacing prior work, say so and say why - don't leave two versions standing.
+
+Applies to your own session too: don't rewrite what you already wrote ten messages ago.
+
+The test: You can name what you searched and what you found (or that you found nothing) before the first new file appears.
+
+## 6. Concise, Detailed Responses
+
+**Density, not length. Every sentence carries information the user doesn't have.**
+
+- Lead with the answer or the result. Context after, only if it changes what they'd do.
+- Specifics over summary: `file.py:42`, the actual error, the actual number. Not "I made some updates."
+- Don't recap what you just did when the diff already shows it.
+- Cut preamble, hedging, and closing offers to help.
+
+**When concise and detailed pull against each other, detail wins on substance, concise wins on prose.** Never drop a caveat, a failure, or a number to save space - drop the words around it.
+
+The test: Delete any sentence. If nothing is lost, it shouldn't have been there.
+
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, fewer duplicate implementations of things that already existed, and clarifying questions come before implementation rather than after mistakes.
