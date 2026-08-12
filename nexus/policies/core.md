@@ -65,7 +65,7 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## 5. Nani Gigantum Humeris Insidentes
+## 5. Search Before You Build (Nani Gigantum Humeris Insidentes)
 
 **Dwarfs standing on the shoulders of giants. Search before you build.**
 
