@@ -27,7 +27,7 @@ nexus/
 │   │   ├── migration.py           # Wing rename helper (workspace path moves)
 │   │   └── status.py              # Read-only diagnostic
 │   ├── policies/
-│   │   ├── core.md                # Karpathy-derived coding baseline
+│   │   ├── core.md                # Karpathy guidelines + workspace conventions
 │   │   ├── continuity.md          # Recall/save triggers
 │   │   └── projects/<name>.md     # Optional per-project policy override
 │   ├── cli.py                     # context | doctor | memory {…} | load | list-projects
@@ -43,7 +43,7 @@ nexus/
 └── tests/                          # pytest suite
 ```
 
-Palace data and hook state live at MemPalace's standard `~/.mempalace/palace` and `~/.mempalace/hook_state` — nexus does not redirect them. Wing names are path-derived (`/home/user/workspace/repo` → `_home_user_workspace_repo`), matching what mempalace's save hooks auto-derive — so reads and writes converge on one name without forking either tool.
+Palace data and hook state live at MemPalace's standard `~/.mempalace/palace` and `~/.mempalace/hook_state` — nexus does not redirect them. Wing names are path-derived (`/home/user/workspace/repo` → `home_user_workspace_repo`), matching what mempalace's save hooks auto-derive — so reads and writes converge on one name without forking either tool.
 
 ## Activation
 
@@ -52,7 +52,7 @@ Workspace root resolves from `$NEXUS_WORKSPACE_ROOT`, falling back to the parent
 1. A workspace-level `CLAUDE.md` imports `core.md` + `continuity.md` via Claude Code's ancestor walk.
 2. SessionStart hook runs `nexus context --repo-path "$CLAUDE_PROJECT_DIR"`; stdout (identity + project list + load instruction + doc snippets) is injected as session context.
 3. Once the user states what they want to work on, the agent runs `nexus load <project> --topic "<their message>"` to pull project-scoped policy + targeted MemPalace recall.
-4. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) injects `mempalace search` hits per prompt.
+4. UserPromptSubmit hook (`hooks/nexus-user-prompt-submit.sh`) injects `mempalace search` hits per prompt, scoped to the wing derived from the payload's own `cwd` — so a session launched at the workspace root still gets per-repo recall as work moves into a project.
 5. Stop / PreCompact hooks (mempalace-provided) auto-mine transcripts as you work.
 
 Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support pending upstream.
@@ -63,7 +63,7 @@ Codex CLI gets the same Stop/PreCompact wiring; UserPromptSubmit support pending
 nexus context --repo-path <path>           # Lean SessionStart baseline (identity + projects + load instruction + docs)
 nexus list-projects                        # Table of workspace projects with wing + policy source
 nexus load <project> --topic "<text>"      # Per-project policy + targeted recall scoped to the wing
-nexus doctor  --repo-path <path>           # Workspace + memory wiring health check
+nexus doctor  --repo-path <path>           # Workspace + memory wiring health check, plus 24h prompt-hook fires/timeouts
 nexus memory init --mempalace-repo <path> --user-prompt-hook <path>
 nexus memory status
 nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all drawers
@@ -75,7 +75,7 @@ nexus memory rename-wing --from <X> --to <Y>   # Rewrite a wing label across all
 
 `nexus load <project>` reads its domain policy from `nexus/policies/projects/<project>.md` if present, otherwise falls back to `core.md` with a one-line bootstrap note pointing at the missing file. This lets a coding project use the Karpathy guidelines while, say, a writing project ships its own philosophy (show-don't-tell, draft-over-polish, etc.).
 
-Note that this resolution picks exactly one file — an override *replaces* `core.md` rather than layering on top of it. The unconditional layer comes from elsewhere: the workspace-root `CLAUDE.md` `@`-imports `core.md` and `continuity.md` directly, so both stay in context for every project regardless of what `nexus load` resolves. Sections 5-6 of `core.md` (search-before-you-build, concise-detailed responses) are domain-neutral and reach overriding projects that way.
+Note that this resolution picks exactly one file — an override *replaces* `core.md` rather than layering on top of it. The unconditional layer comes from elsewhere: the workspace-root `CLAUDE.md` `@`-imports `core.md` and `continuity.md` directly, so both stay in context for every project regardless of what `nexus load` resolves. Sections 5-7 of `core.md` (search-before-you-build, concise-detailed responses, verify-against-reality) are domain-neutral and reach overriding projects that way.
 
 ## Install
 
