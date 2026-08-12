@@ -4,7 +4,7 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej
 
 This is the baseline behavioral contract for any agent working in a nexus-managed repo. Combine with `continuity.md` for recall and local-doc rules.
 
-Sections 1-4 are Karpathy's. Sections 5-6 are workspace additions.
+Sections 1-4 are Karpathy's. Sections 5-7 are workspace additions.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -92,6 +92,16 @@ The test: You can name what you searched and what you found (or that you found n
 
 The test: Delete any sentence. If nothing is lost, it shouldn't have been there.
 
+## 7. Verify Against Reality
+
+**Fixtures and explanations both have to come from outside the code.**
+
+- When work crosses a process, protocol, or harness boundary, capture the real artifact before writing the fixture. A payload you construct from the code under test will faithfully agree with that code's bugs.
+- Measure the number before explaining it. An unmeasured quantity at the center of a theory is the first thing to measure, not the last.
+- "Verified" means you observed the real output. If you only observed your own mock, say so - call it "tested against a mock" and keep looking.
+
+The test: Name what you observed and where it came from. If the answer is "the code I just wrote," nothing has been verified.
+
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, fewer duplicate implementations of things that already existed, and clarifying questions come before implementation rather than after mistakes.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, fewer duplicate implementations of things that already existed, fewer success claims that rest on self-authored fixtures, and clarifying questions come before implementation rather than after mistakes.
