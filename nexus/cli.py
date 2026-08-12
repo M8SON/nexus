@@ -263,6 +263,22 @@ def _handle_doctor(args: argparse.Namespace) -> int:
         print(f"{label}: {'yes' if ok else 'no'}")
     print(f"workspace root: {workspace_root}")
     print(f"repo path: {repo_path}")
+
+    # Nothing else reads the prompt-hook log, so a cold-start timeout would
+    # otherwise go unnoticed — the injection just silently doesn't happen.
+    from nexus.memory.status import hook_log_summary
+
+    hooks = hook_log_summary()
+    if hooks["exists"]:
+        print(
+            f"prompt-hook ({hooks['window_hours']}h): {hooks['injected']} injected, "
+            f"{hooks['timed_out']} timed out, {hooks['errors']} errors"
+        )
+        last = hooks["last_fire"]
+        print(f"prompt-hook last fire: {last or 'none in window'}")
+    else:
+        print("prompt-hook log: absent (hook has not fired)")
+
     return 0 if all(ok for _, ok in fatal_checks) else 1
 
 

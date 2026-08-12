@@ -62,10 +62,21 @@ if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
     exit 0
 fi
 
-# 15s, not 5s: a warm search runs ~3.4s, but a cold one loads the embedder
-# model and overruns 5s, silently yielding no injection on a session's first
-# prompt. Claude Code's hook budget for this entry is 30s.
-HITS="$(timeout 15 "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
+# 15s, not 5s: a warm search runs ~3.4s, but a cold one re-reads the 87MB
+# ONNX model from disk instead of page cache and overruns 5s, silently
+# yielding no injection. Claude Code's hook budget for this entry is 30s.
+SEARCH_TIMEOUT=15
+set +e
+HITS="$(timeout "$SEARCH_TIMEOUT" "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG")"
+SEARCH_RC=$?
+set -e
+
+# `timeout` reports 124 when it kills the command. Label it so `nexus doctor`
+# can distinguish a cold-start overrun from an ordinary empty result.
+if [ "$SEARCH_RC" -eq 124 ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] search timed out after ${SEARCH_TIMEOUT}s for wing $WING" >> "$LOG"
+    exit 0
+fi
 if [ -z "$HITS" ]; then
     exit 0
 fi
