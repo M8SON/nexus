@@ -130,5 +130,11 @@ The shared layer (policies, adapters under `nexus/`) is version-controlled — e
 
 - Phase 1 (session recall, local-doc discovery, shared policies, session activation) shipped 2026-04-30.
 - Phase 2 (active memory via MemPalace) shipped 2026-05-02. Earlier BM25 sqlite layer retired.
+- Per-prompt recall injection fixed 2026-08-11 — it had never fired before that.
 
-See `WORKING_MEMORY.md` for current state and known limitations.
+Current state lives in MemPalace (wing `wing_nexus`), not in a checked-in
+status file. Nexus's own `WORKING_MEMORY.md` was pruned once it had drifted
+into claiming things that were no longer true; `mempalace_search` is the
+supported way to ask what the current state is. The convention itself is
+unchanged for repos that still keep one — `doc_recall.py` still discovers
+`WORKING_MEMORY.md` first.
