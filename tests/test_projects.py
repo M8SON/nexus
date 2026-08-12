@@ -59,3 +59,53 @@ def test_returns_false_has_policy_when_projects_dir_missing(tmp_path):
 
     assert len(projects) == 1
     assert projects[0].has_policy is False
+
+
+def test_project_local_philosophy_wins_over_projects_dir(tmp_path):
+    """list_projects must mirror resolve_policy's lookup order."""
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    (workspace / "book" / "PHILOSOPHY.md").write_text("writing rules")
+
+    nexus_root = tmp_path / "nexus_repo"
+    projects_policy_dir = nexus_root / "nexus" / "policies" / "projects"
+    projects_policy_dir.mkdir(parents=True)
+    (projects_policy_dir / "book.md").write_text("shadowed")
+
+    projects = list_projects(workspace, nexus_root=nexus_root)
+
+    assert projects[0].policy_source == "book/PHILOSOPHY.md"
+    assert projects[0].has_policy is True
+
+
+def test_project_local_philosophy_detected_without_nexus_root(tmp_path):
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    (workspace / "book" / "PHILOSOPHY.md").write_text("writing rules")
+
+    projects = list_projects(workspace)
+
+    assert projects[0].policy_source == "book/PHILOSOPHY.md"
+
+
+def test_policy_source_is_none_when_falling_back_to_core(tmp_path):
+    workspace = tmp_path / "linux"
+    (workspace / "nexus").mkdir(parents=True)
+
+    projects = list_projects(workspace)
+
+    assert projects[0].policy_source is None
+    assert projects[0].has_policy is False
+
+
+def test_policy_source_reports_projects_dir_override(tmp_path):
+    workspace = tmp_path / "linux"
+    (workspace / "book").mkdir(parents=True)
+    nexus_root = tmp_path / "nexus_repo"
+    projects_policy_dir = nexus_root / "nexus" / "policies" / "projects"
+    projects_policy_dir.mkdir(parents=True)
+    (projects_policy_dir / "book.md").write_text("writing rules")
+
+    projects = list_projects(workspace, nexus_root=nexus_root)
+
+    assert projects[0].policy_source == "projects/book.md"

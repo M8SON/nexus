@@ -5,19 +5,25 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+PROJECT_POLICY_FILENAME = "PHILOSOPHY.md"
+
+
 @dataclass(frozen=True)
 class Project:
     name: str
     path: Path
     has_policy: bool
+    policy_source: str | None = None
 
 
 def list_projects(workspace_root: Path, nexus_root: Path | None = None) -> list[Project]:
     """List directories directly under `workspace_root` as projects.
 
     Skips hidden dirs (starting with `.`) and dunder dirs (starting with `_`).
-    If `nexus_root` is provided, flags whether each project has a policy file at
-    `<nexus_root>/nexus/policies/projects/<name>.md`.
+    Reports which policy file each project resolves to, mirroring
+    `load.resolve_policy`'s lookup order: a project-local `PHILOSOPHY.md`
+    wins, then `<nexus_root>/nexus/policies/projects/<name>.md` when
+    `nexus_root` is given, else None (meaning the core.md fallback).
     """
     workspace_root = Path(workspace_root)
     if not workspace_root.is_dir():
@@ -34,6 +40,18 @@ def list_projects(workspace_root: Path, nexus_root: Path | None = None) -> list[
         name = child.name
         if name.startswith(".") or name.startswith("_"):
             continue
-        has_policy = bool(policy_dir and (policy_dir / f"{name}.md").is_file())
-        projects.append(Project(name=name, path=child, has_policy=has_policy))
+        if (child / PROJECT_POLICY_FILENAME).is_file():
+            policy_source = f"{name}/{PROJECT_POLICY_FILENAME}"
+        elif policy_dir and (policy_dir / f"{name}.md").is_file():
+            policy_source = f"projects/{name}.md"
+        else:
+            policy_source = None
+        projects.append(
+            Project(
+                name=name,
+                path=child,
+                has_policy=policy_source is not None,
+                policy_source=policy_source,
+            )
+        )
     return projects

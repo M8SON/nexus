@@ -226,7 +226,7 @@ def _handle_list_projects(args: argparse.Namespace) -> int:
 
     rows = [("project", "wing", "policy")]
     for p in projects:
-        policy_label = f"projects/{p.name}.md" if p.has_policy else "core (default)"
+        policy_label = p.policy_source or "core (default)"
         rows.append((p.name, path_to_wing(p.path), policy_label))
 
     widths = [max(len(r[i]) for r in rows) for i in range(3)]

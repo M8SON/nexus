@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nexus.memory.wings import path_to_wing
-from nexus.projects import list_projects
+from nexus.projects import PROJECT_POLICY_FILENAME, list_projects
 
 
 @dataclass(frozen=True)
@@ -18,9 +18,6 @@ class PolicyResolution:
     text: str
     source: str
     bootstrap_note: str | None
-
-
-PROJECT_POLICY_FILENAME = "PHILOSOPHY.md"
 
 
 def resolve_policy(
