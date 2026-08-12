@@ -233,6 +233,7 @@ def init(
 
     backfill_done = False
     marker = nexus_root / "data" / "backfill_markers" / f"{wing}.done"
+    _adopt_legacy_marker(marker)
     if not skip_backfill and not marker.exists():
         marker.parent.mkdir(parents=True, exist_ok=True)
         backfill_done = _run_backfill(wing=wing, marker=marker)
@@ -245,6 +246,20 @@ def init(
         "claude_mcp_reason": mcp_registration.get("reason"),
         "backfill_done": backfill_done,
     }
+
+
+def _adopt_legacy_marker(marker: Path) -> None:
+    """Rename a marker written before wing names dropped their leading `_`.
+
+    `path_to_wing` used to emit `_home_user_linux_nexus`; it now strips the
+    leading separator. Markers already on disk kept the old name, so a
+    re-init would miss them and re-run the whole historical mine. Adopt the
+    old file instead of re-mining.
+    """
+    legacy = marker.with_name(f"_{marker.name}")
+    if legacy.is_file() and not marker.exists():
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        legacy.rename(marker)
 
 
 def _run_backfill(wing: str, marker: Path) -> bool:

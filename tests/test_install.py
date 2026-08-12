@@ -2,7 +2,12 @@
 import json
 from pathlib import Path
 
-from nexus.memory.install import locate_mempalace_hooks, merge_claude_hooks, write_codex_hooks
+from nexus.memory.install import (
+    _adopt_legacy_marker,
+    locate_mempalace_hooks,
+    merge_claude_hooks,
+    write_codex_hooks,
+)
 
 
 HOOK_SCRIPT = "/abs/path/mempal_save_hook.sh"
@@ -363,3 +368,37 @@ def test_init_refuses_when_cwd_outside_workspace(tmp_path, monkeypatch):
             user_prompt_hook=tmp_path / "u.sh",
             skip_backfill=True,
         )
+
+
+def test_adopt_legacy_marker_renames_underscore_prefixed_file(tmp_path):
+    """Markers predate the wing rename that stripped the leading `_`."""
+    markers = tmp_path / "backfill_markers"
+    markers.mkdir()
+    legacy = markers / "_home_user_linux_nexus.done"
+    legacy.write_text("done\n", encoding="utf-8")
+    marker = markers / "home_user_linux_nexus.done"
+
+    _adopt_legacy_marker(marker)
+
+    assert marker.is_file()
+    assert not legacy.exists()
+
+
+def test_adopt_legacy_marker_keeps_current_file_when_both_exist(tmp_path):
+    markers = tmp_path / "backfill_markers"
+    markers.mkdir()
+    (markers / "_home_user_linux_nexus.done").write_text("old\n", encoding="utf-8")
+    marker = markers / "home_user_linux_nexus.done"
+    marker.write_text("current\n", encoding="utf-8")
+
+    _adopt_legacy_marker(marker)
+
+    assert marker.read_text(encoding="utf-8") == "current\n"
+
+
+def test_adopt_legacy_marker_noop_when_nothing_on_disk(tmp_path):
+    marker = tmp_path / "backfill_markers" / "home_user_linux_nexus.done"
+
+    _adopt_legacy_marker(marker)
+
+    assert not marker.exists()
