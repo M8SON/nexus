@@ -14,11 +14,11 @@ LOG="$LOG_DIR/user-prompt-hook.log"
 # Read the payload from stdin. Claude Code sends UserPromptSubmit as JSON with
 # keys: cwd, hook_event_name, permission_mode, prompt, prompt_id, session_id,
 # transcript_path. The prompt text is `prompt` — verified against a live
-# payload, not assumed. Every exit past this point must echo $PAYLOAD back,
-# since stdin has already been consumed.
+# payload, not assumed. A no-op is silent: empty stdout with exit 0
+# adds no context and never blocks the prompt.
 PAYLOAD="$(cat)"
 PROMPT="$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("prompt",""))' 2>/dev/null || true)"
-[ -n "$PROMPT" ] || { printf '%s' "$PAYLOAD"; exit 0; }
+[ -n "$PROMPT" ] || exit 0
 
 # Resolve the wing. Explicit $NEXUS_WING wins (manual runs and tests);
 # otherwise derive it from the payload's own `cwd` via the same resolve_wing()
@@ -41,7 +41,7 @@ print(resolve_wing(Path(sys.argv[1])) or "")
 ' "${PAYLOAD_CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}" 2>/dev/null || true)"
     fi
 fi
-[ -n "$WING" ] || { printf '%s' "$PAYLOAD"; exit 0; }
+[ -n "$WING" ] || exit 0
 
 # Resolve the mempalace binary. Claude Code may launch hooks with a stripped
 # PATH that omits the nexus venv's bin/, so falling back to the venv adjacent
@@ -59,7 +59,6 @@ if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
 fi
 if [ -z "$MEMPALACE_BIN_RESOLVED" ] || [ ! -x "$MEMPALACE_BIN_RESOLVED" ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] mempalace binary not found (set MEMPALACE_BIN to override)" >> "$LOG"
-    printf '%s' "$PAYLOAD"
     exit 0
 fi
 
@@ -68,16 +67,21 @@ fi
 # prompt. Claude Code's hook budget for this entry is 30s.
 HITS="$(timeout 15 "$MEMPALACE_BIN_RESOLVED" search "$PROMPT" --wing "$WING" --results 3 2>>"$LOG" || true)"
 if [ -z "$HITS" ]; then
-    printf '%s' "$PAYLOAD"
     exit 0
 fi
 
-# Append hits as additional context. Claude Code's UserPromptSubmit hook
-# expects the JSON payload back on stdout with optional `additional_context`.
-printf '%s' "$PAYLOAD" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-data['additional_context'] = '''Prior session hits:
-$HITS'''
-print(json.dumps(data))
-" 2>>"$LOG" || printf '%s' "$PAYLOAD"
+# Emit a UserPromptSubmit control object. Hits are passed through the
+# environment rather than interpolated into the Python source, so quotes,
+# backslashes and `$` in recalled text cannot corrupt the program.
+NEXUS_HITS="$HITS" python3 -c "
+import json, os
+ctx = 'Prior session hits:\n' + os.environ.get('NEXUS_HITS', '')
+print(json.dumps({
+    'hookSpecificOutput': {
+        'hookEventName': 'UserPromptSubmit',
+        'additionalContext': ctx,
+    }
+}))
+" 2>>"$LOG" || true
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] injected ${#HITS} chars for wing $WING" >> "$LOG"
