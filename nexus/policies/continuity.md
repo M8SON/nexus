@@ -21,3 +21,7 @@ If you discover a fact mid-task that meets the durable bar — call the appropri
 ## Wing scoping
 
 Always pass the active repo's wing in `mempalace_search` and `mempalace_wake_up` calls unless you are explicitly broadening. Cross-wing search is for when the user names another project, or when you suspect prior context lives elsewhere.
+
+Wing names are **path-derived**, never invented. The name is the repo's absolute path with `/`, `-` and space collapsed to `_`, lowercased, outer `_` stripped — what `nexus.memory.wings.path_to_wing()` returns. `~/linux/kaizen` is `home_daedalus_linux_kaizen`.
+
+This matters on the **write** side, not just the read side. `mempalace_add_drawer` takes `wing` as a free string and validates nothing, so a friendly-looking name like `wing_kaizen` is accepted silently — and is then invisible to the UserPromptSubmit hook, to `nexus load`, and to every wing-scoped search, all of which resolve wings by path. A drawer filed under an invented name is a drawer nobody will read. Save to the same wing you would search.
