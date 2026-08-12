@@ -7,12 +7,29 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Resolve the wing for this repo. Explicit $NEXUS_WING wins (manual runs and
-# tests); otherwise derive it from the project dir via the same resolve_wing()
-# that `nexus load` uses, so the hook scopes per repo with no per-repo env
-# setup. Dirs outside the workspace resolve to empty — no injection.
+LOG_DIR="$HOME/.cache/nexus"
+mkdir -p "$LOG_DIR" 2>/dev/null || true
+LOG="$LOG_DIR/user-prompt-hook.log"
+
+# Read the payload from stdin. Claude Code sends UserPromptSubmit as JSON with
+# keys: cwd, hook_event_name, permission_mode, prompt, prompt_id, session_id,
+# transcript_path. The prompt text is `prompt` — verified against a live
+# payload, not assumed. Every exit past this point must echo $PAYLOAD back,
+# since stdin has already been consumed.
+PAYLOAD="$(cat)"
+PROMPT="$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("prompt",""))' 2>/dev/null || true)"
+[ -n "$PROMPT" ] || { printf '%s' "$PAYLOAD"; exit 0; }
+
+# Resolve the wing. Explicit $NEXUS_WING wins (manual runs and tests);
+# otherwise derive it from the payload's own `cwd` via the same resolve_wing()
+# that `nexus load` uses. Preferring the payload cwd over $CLAUDE_PROJECT_DIR
+# means a session launched at the workspace root still scopes to whichever
+# repo the work has moved into, instead of pinning to the catch-all wing.
+# resolve_wing() collapses any subdirectory to its repo and returns empty
+# outside the workspace, in which case there is nothing to inject.
 WING="${NEXUS_WING:-}"
 if [ -z "$WING" ]; then
+    PAYLOAD_CWD="$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("cwd","") or "")' 2>/dev/null || true)"
     NEXUS_PY="$SCRIPT_DIR/../.venv/bin/python"
     [ -x "$NEXUS_PY" ] || NEXUS_PY="$(command -v python3 2>/dev/null || true)"
     if [ -n "$NEXUS_PY" ]; then
@@ -21,19 +38,10 @@ import sys
 from pathlib import Path
 from nexus.memory.wings import resolve_wing
 print(resolve_wing(Path(sys.argv[1])) or "")
-' "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || true)"
+' "${PAYLOAD_CWD:-${CLAUDE_PROJECT_DIR:-$PWD}}" 2>/dev/null || true)"
     fi
 fi
-[ -n "$WING" ] || exit 0
-
-# Read the prompt from stdin (Claude Code passes it as JSON).
-PAYLOAD="$(cat)"
-PROMPT="$(printf '%s' "$PAYLOAD" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("user_prompt",""))' 2>/dev/null || true)"
-[ -n "$PROMPT" ] || { printf '%s' "$PAYLOAD"; exit 0; }
-
-LOG_DIR="$HOME/.cache/nexus"
-mkdir -p "$LOG_DIR" 2>/dev/null || true
-LOG="$LOG_DIR/user-prompt-hook.log"
+[ -n "$WING" ] || { printf '%s' "$PAYLOAD"; exit 0; }
 
 # Resolve the mempalace binary. Claude Code may launch hooks with a stripped
 # PATH that omits the nexus venv's bin/, so falling back to the venv adjacent
