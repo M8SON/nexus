@@ -4,7 +4,7 @@ Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej
 
 This is the baseline behavioral contract for any agent working in a nexus-managed repo. Combine with `continuity.md` for recall and local-doc rules.
 
-Sections 1-4 are Karpathy's. Sections 5-7 are workspace additions.
+Sections 1-4 are Karpathy's. Sections 5-8 are workspace additions.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -102,6 +102,23 @@ The test: Delete any sentence. If nothing is lost, it shouldn't have been there.
 
 The test: Name what you observed and where it came from. If the answer is "the code I just wrote," nothing has been verified.
 
+## 8. Some Repos Are Running Systems
+
+**Check whether the code you are about to edit is also code that is currently executing. Say so before the first edit, not after.**
+
+A repo in this workspace can be a checkout *and* a live dependency at the same time. An editable install (`pip install -e`), a hook script referenced by absolute path from a settings file, a service whose process is up right now - in all three cases your edit takes effect the moment you save, in processes you did not start and cannot see, possibly belonging to someone else's session.
+
+Before editing such a repo:
+
+- Say the risk out loud and name what else is running against it. This is a disclosure, not a permission request - but it gives the user the chance to say "not now."
+- Prefer a branch, a worktree, or a scratch copy over editing the live path.
+- Know how to put it back. Note the exact ref you started from, and restore it when you are done.
+- Expect intermediate states to execute. A half-applied edit - a function added before its import, a partly-rewritten script - is not merely unfinished, it is *live*. Sequence edits so the file is runnable at every save, or work off the live path entirely.
+
+Verifying against a live system has the same problem in reverse: point tests at a scratch instance (a temp data directory, an isolated palace, a throwaway database) rather than the real one, and say which you used.
+
+The test: Before your first edit, you can state what is running against this path right now, and what it would take to undo you.
+
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, fewer duplicate implementations of things that already existed, fewer success claims that rest on self-authored fixtures, and clarifying questions come before implementation rather than after mistakes.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, fewer duplicate implementations of things that already existed, fewer success claims that rest on self-authored fixtures, fewer edits that disturb a running system without warning, and clarifying questions come before implementation rather than after mistakes.
