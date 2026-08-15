@@ -11,13 +11,40 @@ from nexus.memory.wings import path_to_wing
 from nexus.projects import PROJECT_POLICY_FILENAME, list_projects
 
 
+#: What the workspace CLAUDE.md @-imports for every session in the tree.
+BASELINE_FILES = "core.md + continuity.md"
+
+#: Printed when the resolved policy is a *project* file. The resolved file is
+#: not the whole policy — the baseline is imported separately and is always
+#: live — so displaying it alone reads as a replacement when it is a layer.
+BASELINE_ADDITIONAL_NOTE = (
+    f"baseline: {BASELINE_FILES} are also in effect — CLAUDE.md @-imports them "
+    "for every session in this tree. The policy below is additional; where it "
+    "is more specific, it wins."
+)
+
+#: Printed when core.md is itself the resolved policy. Here the baseline is not
+#: a second layer, it is the same text twice, and saying "additional" would
+#: invent a distinction that does not exist.
+BASELINE_SAME_FILE_NOTE = (
+    f"baseline: this is the same file CLAUDE.md already @-imports (with "
+    f"{BASELINE_FILES}); it is shown here in full, not loaded twice."
+)
+
+
 @dataclass(frozen=True)
 class PolicyResolution:
-    """Result of resolving a project's policy file."""
+    """Result of resolving a project's policy file.
+
+    `text`/`source` describe the ONE file this lookup selected. That file is
+    never the complete behavioral contract: the workspace CLAUDE.md @-imports
+    the baseline unconditionally, so `baseline_note` states what else is live.
+    """
 
     text: str
     source: str
     bootstrap_note: str | None
+    baseline_note: str
 
 
 def resolve_policy(
@@ -40,6 +67,7 @@ def resolve_policy(
                 text=local_md.read_text(encoding="utf-8"),
                 source=f"{project}/{PROJECT_POLICY_FILENAME}",
                 bootstrap_note=None,
+                baseline_note=BASELINE_ADDITIONAL_NOTE,
             )
 
     policies = Path(nexus_root) / "nexus" / "policies"
@@ -51,6 +79,7 @@ def resolve_policy(
             text=project_md.read_text(encoding="utf-8"),
             source=f"projects/{project}.md",
             bootstrap_note=None,
+            baseline_note=BASELINE_ADDITIONAL_NOTE,
         )
 
     if not core_md.is_file():
@@ -66,6 +95,7 @@ def resolve_policy(
         text=core_md.read_text(encoding="utf-8"),
         source="core.md",
         bootstrap_note=note,
+        baseline_note=BASELINE_SAME_FILE_NOTE,
     )
 
 

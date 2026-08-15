@@ -196,6 +196,7 @@ def _handle_load(args: argparse.Namespace) -> int:
     print(f"# Project policy: {result.project} (source: {result.policy.source})")
     if result.policy.bootstrap_note:
         print(result.policy.bootstrap_note)
+    print(result.policy.baseline_note)
     print()
     print(result.policy.text.rstrip())
     print()

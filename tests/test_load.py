@@ -65,6 +65,52 @@ def test_returns_project_local_philosophy_when_present(tmp_path):
     assert result.bootstrap_note is None
 
 
+class TestBaselineNote:
+    """`nexus load` prints ONE policy file, but core.md is always in context too.
+
+    /home/daedalus/linux/CLAUDE.md @-imports core.md and continuity.md, so they
+    load for every session in the tree regardless of what resolve_policy picks.
+    Presenting the resolved file alone as "the policy" has now sent two separate
+    sessions to the wrong conclusion — that a project PHILOSOPHY.md *replaces*
+    the baseline. It does not; it only replaces what gets displayed.
+    """
+
+    def test_project_local_philosophy_says_baseline_is_additional(self, tmp_path):
+        nexus_root = _make_nexus_root(tmp_path)
+        project_dir = tmp_path / "linux" / "book"
+        project_dir.mkdir(parents=True)
+        (project_dir / "PHILOSOPHY.md").write_text("# Book philosophy")
+
+        note = resolve_policy("book", nexus_root, project_dir=project_dir).baseline_note
+
+        assert note is not None
+        assert "CLAUDE.md" in note
+        assert "continuity.md" in note
+        assert "additional" in note
+
+    def test_central_project_policy_says_baseline_is_additional(self, tmp_path):
+        nexus_root = _make_nexus_root(tmp_path)
+        (nexus_root / "nexus" / "policies" / "projects" / "book.md").write_text("# central")
+
+        note = resolve_policy("book", nexus_root).baseline_note
+
+        assert note is not None
+        assert "CLAUDE.md" in note
+        assert "additional" in note
+
+    def test_core_fallback_says_it_is_the_same_file_not_a_second_policy(self, tmp_path):
+        """The duplicate-display case: core.md shown here AND imported by CLAUDE.md."""
+        nexus_root = _make_nexus_root(tmp_path)
+
+        note = resolve_policy("book", nexus_root).baseline_note
+
+        assert note is not None
+        assert "CLAUDE.md" in note
+        assert "same file" in note
+        # Must NOT imply a second, separate layer on top of itself.
+        assert "additional" not in note
+
+
 def test_project_local_philosophy_beats_central(tmp_path):
     nexus_root = _make_nexus_root(tmp_path)
     (nexus_root / "nexus" / "policies" / "projects" / "book.md").write_text("central")
